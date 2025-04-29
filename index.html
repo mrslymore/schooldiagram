@@ -20,6 +20,7 @@
       height: 90vh;
       position: relative;
       background-color: #fafafa;
+      overflow: hidden;
     }
     .room {
       position: absolute;
@@ -29,7 +30,6 @@
       cursor: move;
       padding: 5px;
       overflow: hidden;
-      resize: none;
     }
     .resizer {
       width: 10px;
@@ -40,6 +40,21 @@
       bottom: 0;
       cursor: se-resize;
     }
+    #trash {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      width: 60px;
+      height: 60px;
+      background: #e63946;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      border-radius: 8px;
+      z-index: 999;
+    }
   </style>
 </head>
 <body>
@@ -48,72 +63,86 @@
     <button onclick="addRoom()">➕ Add Room</button>
     <button onclick="saveLayout()">💾 Save Layout</button>
     <button onclick="loadLayout()">📂 Load Layout</button>
+    <input type="file" id="fileInput" accept=".json" style="display:none" />
   </div>
   <div id="floorplan"></div>
+  <div id="trash">🗑️</div>
   <script>
     const floorplan = document.getElementById('floorplan');
+    const trash = document.getElementById('trash');
 
     function addRoom(data = null) {
       const room = document.createElement('div');
       room.className = 'room';
-      room.setAttribute('draggable', 'true');
       room.setAttribute('contenteditable', 'true');
-      room.innerText = data?.text || 'Double-click to edit';
+      room.innerText = data?.text || 'Room';
 
       room.style.width = data?.width || '100px';
       room.style.height = data?.height || '100px';
       room.style.left = data?.left || '50px';
       room.style.top = data?.top || '50px';
 
-      let offsetX, offsetY;
+      let isDragging = false;
+      let dragOffsetX = 0;
+      let dragOffsetY = 0;
 
-      room.addEventListener('dragstart', (e) => {
-        offsetX = e.offsetX;
-        offsetY = e.offsetY;
+      room.addEventListener('mousedown', (e) => {
+        if (e.target.classList.contains('resizer')) return;
+        isDragging = true;
+        dragOffsetX = e.offsetX;
+        dragOffsetY = e.offsetY;
+        room.style.zIndex = 1000;
       });
 
-      room.addEventListener('dragend', (e) => {
-        const snapMargin = 15;
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const floorRect = floorplan.getBoundingClientRect();
+        let newLeft = e.clientX - floorRect.left - dragOffsetX;
+        let newTop = e.clientY - floorRect.top - dragOffsetY;
+
+        const snapMargin = 10;
         const rooms = Array.from(document.querySelectorAll('.room')).filter(r => r !== room);
-        let snapped = false;
 
-        const newLeft = e.pageX - offsetX;
-        const newTop = e.pageY - offsetY;
-        const roomWidth = room.offsetWidth;
-        const roomHeight = room.offsetHeight;
+        const roomW = room.offsetWidth;
+        const roomH = room.offsetHeight;
 
-        for (let other of rooms) {
-          const otherRect = other.getBoundingClientRect();
+        rooms.forEach(other => {
+          const otherLeft = other.offsetLeft;
+          const otherTop = other.offsetTop;
+          const otherW = other.offsetWidth;
+          const otherH = other.offsetHeight;
 
-          if (Math.abs((newLeft + roomWidth) - (other.offsetLeft)) < snapMargin) {
-            room.style.left = other.offsetLeft - roomWidth + 'px';
-            room.style.top = newTop + 'px';
-            snapped = true;
-            break;
+          if (Math.abs(newLeft - (otherLeft + otherW)) < snapMargin) {
+            newLeft = otherLeft + otherW;
           }
-          if (Math.abs(newLeft - (other.offsetLeft + other.offsetWidth)) < snapMargin) {
-            room.style.left = other.offsetLeft + other.offsetWidth + 'px';
-            room.style.top = newTop + 'px';
-            snapped = true;
-            break;
+          if (Math.abs((newLeft + roomW) - otherLeft) < snapMargin) {
+            newLeft = otherLeft - roomW;
           }
-          if (Math.abs((newTop + roomHeight) - (other.offsetTop)) < snapMargin) {
-            room.style.top = other.offsetTop - roomHeight + 'px';
-            room.style.left = newLeft + 'px';
-            snapped = true;
-            break;
+          if (Math.abs(newTop - (otherTop + otherH)) < snapMargin) {
+            newTop = otherTop + otherH;
           }
-          if (Math.abs(newTop - (other.offsetTop + other.offsetHeight)) < snapMargin) {
-            room.style.top = other.offsetTop + other.offsetHeight + 'px';
-            room.style.left = newLeft + 'px';
-            snapped = true;
-            break;
+          if (Math.abs((newTop + roomH) - otherTop) < snapMargin) {
+            newTop = otherTop - roomH;
           }
-        }
+        });
 
-        if (!snapped) {
-          room.style.left = newLeft + 'px';
-          room.style.top = newTop + 'px';
+        room.style.left = newLeft + 'px';
+        room.style.top = newTop + 'px';
+      });
+
+      window.addEventListener('mouseup', (e) => {
+        isDragging = false;
+        room.style.zIndex = '';
+
+        const trashRect = trash.getBoundingClientRect();
+        const roomRect = room.getBoundingClientRect();
+        const overlap = !(roomRect.right < trashRect.left ||
+                          roomRect.left > trashRect.right ||
+                          roomRect.bottom < trashRect.top ||
+                          roomRect.top > trashRect.bottom);
+
+        if (overlap) {
+          room.remove();
         }
       });
 
@@ -121,44 +150,77 @@
       resizer.className = 'resizer';
       room.appendChild(resizer);
 
-      resizer.addEventListener('mousedown', initResize);
-      function initResize(e) {
-        e.preventDefault();
-        window.addEventListener('mousemove', Resize, false);
-        window.addEventListener('mouseup', stopResize, false);
-      }
-      function Resize(e) {
-        room.style.width = (e.clientX - room.getBoundingClientRect().left) + 'px';
-        room.style.height = (e.clientY - room.getBoundingClientRect().top) + 'px';
-      }
-      function stopResize() {
-        window.removeEventListener('mousemove', Resize, false);
-        window.removeEventListener('mouseup', stopResize, false);
-      }
+      let isResizing = false;
+      resizer.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        isResizing = true;
+        room.style.zIndex = 1000;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const rect = room.getBoundingClientRect();
+        const floorRect = floorplan.getBoundingClientRect();
+        const newWidth = e.clientX - rect.left;
+        const newHeight = e.clientY - rect.top;
+        room.style.width = newWidth + 'px';
+        room.style.height = newHeight + 'px';
+      });
+
+      window.addEventListener('mouseup', () => {
+        isResizing = false;
+      });
 
       floorplan.appendChild(room);
     }
 
     function saveLayout() {
       const rooms = document.querySelectorAll('.room');
-      const layout = Array.from(rooms).map(room => ({
-        left: room.style.left,
-        top: room.style.top,
-        width: room.style.width,
-        height: room.style.height,
-        text: room.innerText.trim()
-      }));
-      localStorage.setItem('floorplanLayout', JSON.stringify(layout));
-      alert('Layout saved!');
+      const layout = {
+        version: "1.0",
+        rooms: Array.from(rooms).map(room => ({
+          left: room.style.left,
+          top: room.style.top,
+          width: room.style.width,
+          height: room.style.height,
+          text: room.innerText.trim()
+        }))
+      };
+
+      const blob = new Blob([JSON.stringify(layout, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'floorplan.json';
+      a.click();
+      URL.revokeObjectURL(url);
     }
 
     function loadLayout() {
-      const data = JSON.parse(localStorage.getItem('floorplanLayout'));
-      if (data) {
-        floorplan.innerHTML = '';
-        data.forEach(room => addRoom(room));
-      }
+      document.getElementById('fileInput').click();
     }
+
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const data = JSON.parse(event.target.result);
+          floorplan.innerHTML = '';
+
+          if (data.version === "1.0" && Array.isArray(data.rooms)) {
+            data.rooms.forEach(room => addRoom(room));
+          } else {
+            alert("Unsupported or invalid layout version.");
+          }
+        } catch (err) {
+          alert('Invalid file format.');
+        }
+      };
+      reader.readAsText(file);
+    });
   </script>
 </body>
 </html>
