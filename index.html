@@ -40,6 +40,7 @@
       font-size: calc(10px + 0.3vw);
       max-width: 100%;
       max-height: 100%;
+      color: white;
     }
     .resizer {
       width: 10px;
@@ -65,22 +66,13 @@
       border-radius: 8px;
       z-index: 999;
     }
-    #zoom-controls {
+    #zoom-controls, #undo-redo-controls {
       position: fixed;
       top: 10px;
       left: 10px;
       z-index: 1000;
     }
-    #zoom-controls button {
-      margin: 5px;
-    }
-    #undo-redo-controls {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      z-index: 1000;
-    }
-    #undo-redo-controls button {
+    #zoom-controls button, #undo-redo-controls button {
       margin: 5px;
     }
   </style>
@@ -214,7 +206,7 @@
     }
 
     function updateTextSize(room) {
-      const fontSize = Math.min(room.offsetWidth / 10, room.offsetHeight / 10, 24); // Shrink text based on box size, with a max size of 24px
+      const fontSize = Math.min(room.offsetWidth / 8, room.offsetHeight / 8, 20); // Shrink text based on box size
       room.style.fontSize = fontSize + 'px';
     }
 
