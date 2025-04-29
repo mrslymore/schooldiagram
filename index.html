@@ -21,8 +21,8 @@
       position: relative;
       background-color: #fafafa;
       overflow: hidden;
-      transform: scale(1);
       transform-origin: top left;
+      transition: transform 0.2s ease;
     }
     .room {
       position: absolute;
@@ -206,7 +206,8 @@
     }
 
     function updateTextSize(room) {
-      const fontSize = Math.min(room.offsetWidth / 8, room.offsetHeight / 8, 20); // Shrink text based on box size
+      // Shrink the text to fit the box without wrapping
+      const fontSize = Math.min(room.offsetWidth / 8, room.offsetHeight / 8, 18); // Shrink text based on box size
       room.style.fontSize = fontSize + 'px';
     }
 
