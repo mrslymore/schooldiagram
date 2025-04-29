@@ -10,32 +10,38 @@
       margin: 0;
       padding: 0;
     }
+    h1 {
+      margin: 0;
+      padding: 10px;
+      background: #fff;
+      border-bottom: 1px solid #ccc;
+    }
     #toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
       padding: 10px;
       background: #f4f4f4;
       border-bottom: 1px solid #ccc;
-      display: flex;
-      justify-content: space-between;
       align-items: center;
-      position: fixed;
-      top: 0;
-      width: 100%;
-      z-index: 1000;
+    }
+    #floorplan-container {
+      width: 100vw;
+      height: calc(100vh - 100px);
+      overflow: auto;
+      background-color: #fafafa;
+      position: relative;
     }
     #floorplan {
-      width: 100%;
-      height: calc(85vh - 60px); /* Adjusted to account for toolbar height */
+      width: 3000px;
+      height: 2000px;
       position: relative;
-      background-color: #fafafa;
-      overflow: hidden;
-      margin-top: 60px; /* Added space for toolbar */
       transform-origin: top left;
-      transition: transform 0.2s ease;
     }
     .room {
       position: absolute;
-      background-color: #e63946; /* red color */
-      border: 2px solid #8b0000;
+      background-color: #ff4d4d;
+      border: 2px solid #9b2226;
       box-sizing: border-box;
       cursor: move;
       padding: 5px;
@@ -45,15 +51,12 @@
       align-items: center;
       text-align: center;
       white-space: nowrap;
-      font-size: calc(10px + 0.3vw);
-      max-width: 100%;
-      max-height: 100%;
-      color: white;
+      font-size: 16px;
     }
     .resizer {
       width: 10px;
       height: 10px;
-      background: #8b0000;
+      background: #9b2226;
       position: absolute;
       right: 0;
       bottom: 0;
@@ -74,63 +77,65 @@
       border-radius: 8px;
       z-index: 999;
     }
-    #zoom-controls {
-      display: flex;
-      position: fixed;
-      bottom: 10px;
-      left: 10px;
-      z-index: 1000;
-    }
-    #zoom-controls button {
-      margin: 5px;
-    }
-    #undo-redo-controls {
-      display: flex;
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      z-index: 1000;
-    }
-    #undo-redo-controls button {
-      margin: 5px;
-    }
-    #fileInput {
-      display: none;
-    }
   </style>
 </head>
 <body>
   <h1>School Floorplan Editor</h1>
   <div id="toolbar">
-    <div>
-      <button onclick="addRoom()">➕ Add Room</button>
-      <button onclick="saveLayout()">💾 Save Layout</button>
-    </div>
-    <div>
-      <button onclick="loadLayout()">📂 Load Layout</button>
-    </div>
-  </div>
-  <div id="zoom-controls">
-    <button onclick="zoomIn()">🔍 Zoom In</button>
-    <button onclick="zoomOut()">🔍 Zoom Out</button>
-  </div>
-  <div id="undo-redo-controls">
+    <button onclick="addRoom()">➕ Add Room</button>
+    <button onclick="saveLayout()">💾 Save Layout</button>
+    <button onclick="loadLayout()">📂 Load Layout</button>
+    <input type="file" id="fileInput" accept=".json" style="display:none" />
+    <button onclick="zoomIn()">🔍➕ Zoom In</button>
+    <button onclick="zoomOut()">🔍➖ Zoom Out</button>
     <button onclick="undo()">↩️ Undo</button>
-    <button onclick="redo()">🔁 Redo</button>
+    <button onclick="redo()">↪️ Redo</button>
   </div>
-  <div id="floorplan"></div>
+  <div id="floorplan-container">
+    <div id="floorplan"></div>
+  </div>
   <div id="trash">🗑️</div>
-
-  <!-- Hidden file input -->
-  <input type="file" id="fileInput" />
 
   <script>
     const floorplan = document.getElementById('floorplan');
     const trash = document.getElementById('trash');
+    const fileInput = document.getElementById('fileInput');
     let scale = 1;
+    let history = [];
+    let historyIndex = -1;
 
-    let undoStack = [];
-    let redoStack = [];
+    function recordHistory() {
+      const snapshot = floorplan.innerHTML;
+      history = history.slice(0, historyIndex + 1);
+      history.push(snapshot);
+      historyIndex++;
+    }
+
+    function undo() {
+      if (historyIndex > 0) {
+        historyIndex--;
+        floorplan.innerHTML = history[historyIndex];
+        reattachListeners();
+      }
+    }
+
+    function redo() {
+      if (historyIndex < history.length - 1) {
+        historyIndex++;
+        floorplan.innerHTML = history[historyIndex];
+        reattachListeners();
+      }
+    }
+
+    function zoomIn() {
+      scale += 0.1;
+      floorplan.style.transform = `scale(${scale})`;
+    }
+
+    function zoomOut() {
+      scale = Math.max(0.1, scale - 0.1);
+      floorplan.style.transform = `scale(${scale})`;
+    }
 
     function addRoom(data = null) {
       const room = document.createElement('div');
@@ -158,8 +163,8 @@
       window.addEventListener('mousemove', (e) => {
         if (!isDragging) return;
         const floorRect = floorplan.getBoundingClientRect();
-        let newLeft = e.clientX - floorRect.left - dragOffsetX;
-        let newTop = e.clientY - floorRect.top - dragOffsetY;
+        let newLeft = (e.clientX - floorRect.left - dragOffsetX) / scale;
+        let newTop = (e.clientY - floorRect.top - dragOffsetY) / scale;
 
         const snapMargin = 10;
         const roomW = room.offsetWidth;
@@ -183,24 +188,12 @@
 
         room.style.left = newLeft + 'px';
         room.style.top = newTop + 'px';
-        updateTextSize(room);
       });
 
-      window.addEventListener('mouseup', (e) => {
+      window.addEventListener('mouseup', () => {
         isDragging = false;
         room.style.zIndex = '';
-
-        const trashRect = trash.getBoundingClientRect();
-        const roomRect = room.getBoundingClientRect();
-        const overlap = !(roomRect.right < trashRect.left ||
-                          roomRect.left > trashRect.right ||
-                          roomRect.bottom < trashRect.top ||
-                          roomRect.top > trashRect.bottom);
-
-        if (overlap) {
-          room.remove();
-          trackAction('remove', room);
-        }
+        recordHistory();
       });
 
       const resizer = document.createElement('div');
@@ -217,79 +210,46 @@
       window.addEventListener('mousemove', (e) => {
         if (!isResizing) return;
         const rect = room.getBoundingClientRect();
-        const floorRect = floorplan.getBoundingClientRect();
-        const newWidth = e.clientX - rect.left;
-        const newHeight = e.clientY - rect.top;
+        const newWidth = (e.clientX - rect.left) / scale;
+        const newHeight = (e.clientY - rect.top) / scale;
         room.style.width = newWidth + 'px';
         room.style.height = newHeight + 'px';
-        updateTextSize(room);
+
+        // Shrink text if it overflows
+        let fontSize = 16;
+        while (room.scrollWidth > room.clientWidth || room.scrollHeight > room.clientHeight) {
+          fontSize--;
+          if (fontSize < 8) break;
+          room.style.fontSize = fontSize + 'px';
+        }
       });
 
       window.addEventListener('mouseup', () => {
         isResizing = false;
+        recordHistory();
       });
 
       floorplan.appendChild(room);
-      updateTextSize(room); // Update font size based on the room's size
-      trackAction('add', room);
+      recordHistory();
     }
 
-    function updateTextSize(room) {
-      const fontSize = Math.min(room.offsetWidth / 8, room.offsetHeight / 8, 18);
-      room.style.fontSize = fontSize + 'px';
-    }
-
-    function zoomIn() {
-      scale += 0.1;
-      applyZoom();
-    }
-
-    function zoomOut() {
-      scale -= 0.1;
-      applyZoom();
-    }
-
-    function applyZoom() {
-      // Prevent zooming too far out
-      if (scale < 0.5) scale = 0.5;
-      floorplan.style.transform = `scale(${scale})`;
-    }
-
-    function trackAction(action, room) {
-      undoStack.push({ action, room });
-      redoStack = [];
-    }
-
-    function undo() {
-      const lastAction = undoStack.pop();
-      if (!lastAction) return;
-
-      if (lastAction.action === 'add') {
-        lastAction.room.remove();
-        redoStack.push(lastAction);
-      } else if (lastAction.action === 'remove') {
-        addRoom(lastAction.room);
-        redoStack.push(lastAction);
-      }
-    }
-
-    function redo() {
-      const lastUndoneAction = redoStack.pop();
-      if (!lastUndoneAction) return;
-
-      if (lastUndoneAction.action === 'add') {
-        addRoom(lastUndoneAction.room);
-        undoStack.push(lastUndoneAction);
-      } else if (lastUndoneAction.action === 'remove') {
-        lastUndoneAction.room.remove();
-        undoStack.push(lastUndoneAction);
-      }
+    function reattachListeners() {
+      document.querySelectorAll('.room').forEach(room => {
+        floorplan.removeChild(room);
+        addRoom({
+          left: room.style.left,
+          top: room.style.top,
+          width: room.style.width,
+          height: room.style.height,
+          text: room.innerText.trim()
+        });
+      });
     }
 
     function saveLayout() {
       const rooms = document.querySelectorAll('.room');
       const layout = {
-        version: "1.0",
+        version: "1.1",
         rooms: Array.from(rooms).map(room => ({
           left: room.style.left,
           top: room.style.top,
@@ -298,7 +258,6 @@
           text: room.innerText.trim()
         }))
       };
-
       const blob = new Blob([JSON.stringify(layout, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -309,26 +268,25 @@
     }
 
     function loadLayout() {
-      document.getElementById('fileInput').click();
+      fileInput.click();
     }
 
-    document.getElementById('fileInput').addEventListener('change', (e) => {
+    fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
           const data = JSON.parse(event.target.result);
-          floorplan.innerHTML = '';
-
-          if (data.version === "1.0" && Array.isArray(data.rooms)) {
+          if (data.version && Array.isArray(data.rooms)) {
+            floorplan.innerHTML = '';
             data.rooms.forEach(room => addRoom(room));
+            recordHistory();
           } else {
-            alert("Unsupported or invalid layout version.");
+            alert("Invalid layout format.");
           }
-        } catch (err) {
-          alert('Invalid file format.');
+        } catch {
+          alert("Failed to load layout.");
         }
       };
       reader.readAsText(file);
