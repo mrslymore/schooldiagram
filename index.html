@@ -28,8 +28,23 @@
       border: 2px solid #219ebc;
       box-sizing: border-box;
       cursor: move;
-      padding: 5px;
       overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .room-text {
+      display: block;
+      width: 100%;
+      height: 100%;
+      text-align: center;
+      font-size: 1em;
+      padding: 5px;
+      box-sizing: border-box;
+      overflow-wrap: break-word;
+      word-break: break-word;
+      pointer-events: none; /* Makes it unselectable unless editing */
+      transform-origin: center center;
     }
     .resizer {
       width: 10px;
@@ -74,8 +89,12 @@
     function addRoom(data = null) {
       const room = document.createElement('div');
       room.className = 'room';
-      room.setAttribute('contenteditable', 'true');
-      room.innerText = data?.text || 'Room';
+
+      const textEl = document.createElement('div');
+      textEl.className = 'room-text';
+      textEl.contentEditable = 'true';
+      textEl.innerText = data?.text || 'Room';
+      room.appendChild(textEl);
 
       room.style.width = data?.width || '100px';
       room.style.height = data?.height || '100px';
@@ -114,28 +133,16 @@
           const thisRight = newLeft + roomW;
           const thisBottom = newTop + roomH;
 
-          // Snap left edge to right edge of another
-          if (Math.abs(newLeft - otherRight) < snapMargin) {
-            newLeft = otherRight;
-          }
-          // Snap right edge to left edge of another
-          if (Math.abs(thisRight - otherLeft) < snapMargin) {
-            newLeft = otherLeft - roomW;
-          }
-          // Snap top edge to bottom edge of another
-          if (Math.abs(newTop - otherBottom) < snapMargin) {
-            newTop = otherBottom;
-          }
-          // Snap bottom edge to top edge of another
-          if (Math.abs(thisBottom - otherTop) < snapMargin) {
-            newTop = otherTop - roomH;
-          }
+          if (Math.abs(newLeft - otherRight) < snapMargin) newLeft = otherRight;
+          if (Math.abs(thisRight - otherLeft) < snapMargin) newLeft = otherLeft - roomW;
+          if (Math.abs(newTop - otherBottom) < snapMargin) newTop = otherBottom;
+          if (Math.abs(thisBottom - otherTop) < snapMargin) newTop = otherTop - roomH;
         });
 
         room.style.left = newLeft + 'px';
         room.style.top = newTop + 'px';
+        resizeTextToFit(textEl);
       });
-
 
       window.addEventListener('mouseup', (e) => {
         isDragging = false;
@@ -172,6 +179,7 @@
         const newHeight = e.clientY - rect.top;
         room.style.width = newWidth + 'px';
         room.style.height = newHeight + 'px';
+        resizeTextToFit(textEl);
       });
 
       window.addEventListener('mouseup', () => {
@@ -190,7 +198,7 @@
           top: room.style.top,
           width: room.style.width,
           height: room.style.height,
-          text: room.textContent.trim()
+          text: room.querySelector('.room-text').textContent.trim()
         }))
       };
 
@@ -228,6 +236,20 @@
       };
       reader.readAsText(file);
     });
+
+    function resizeTextToFit(el) {
+      const parent = el.parentElement;
+      const maxFontSize = 32;
+      const minFontSize = 6;
+      let size = maxFontSize;
+
+      el.style.fontSize = size + 'px';
+
+      while ((el.scrollWidth > parent.clientWidth || el.scrollHeight > parent.clientHeight) && size > minFontSize) {
+        size -= 1;
+        el.style.fontSize = size + 'px';
+      }
+    }
   </script>
 </body>
 </html>
