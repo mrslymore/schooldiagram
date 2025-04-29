@@ -1,18 +1,121 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>School Floorplan Editor</title>
-  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    #toolbar {
+      padding: 10px;
+      background: #f4f4f4;
+      border-bottom: 1px solid #ccc;
+    }
+    #floorplan {
+      width: 100vw;
+      height: 90vh;
+      position: relative;
+      background-color: #fafafa;
+    }
+    .room {
+      position: absolute;
+      background-color: #8ecae6;
+      border: 2px solid #219ebc;
+      box-sizing: border-box;
+      cursor: move;
+      padding: 5px;
+      overflow: hidden;
+    }
+  </style>
 </head>
 <body>
   <h1>School Floorplan Editor</h1>
-  <div class="toolbar">
+  <div id="toolbar">
     <button onclick="addRoom()">➕ Add Room</button>
-    <button onclick="exportLayout()">💾 Export JSON</button>
-    <input type="file" id="fileInput" onchange="importLayout()" />
+    <button onclick="exportJSON()">💾 Export Layout</button>
   </div>
-  <canvas id="floorCanvas" width="1000" height="600"></canvas>
-  <script src="script.js"></script>
+  <div id="floorplan"></div>
+  <script>
+    const floorplan = document.getElementById('floorplan');
+
+    function addRoom() {
+      const width = prompt('Enter room width (px):', 100);
+      const height = prompt('Enter room height (px):', 100);
+      const room = document.createElement('div');
+      room.className = 'room';
+      room.style.width = width + 'px';
+      room.style.height = height + 'px';
+      room.style.left = '50px';
+      room.style.top = '50px';
+      room.setAttribute('draggable', 'true');
+      room.setAttribute('contenteditable', 'true');
+      room.innerText = 'Double-click to edit';
+
+      let offsetX, offsetY;
+
+      room.addEventListener('dragstart', (e) => {
+        offsetX = e.offsetX;
+        offsetY = e.offsetY;
+      });
+
+      room.addEventListener('dragend', (e) => {
+        const closest = getClosestRoom(e.pageX - offsetX, e.pageY - offsetY, room);
+        if (closest && getDistance(closest, e.pageX - offsetX, e.pageY - offsetY) < 20) {
+          const rect = closest.getBoundingClientRect();
+          const planRect = floorplan.getBoundingClientRect();
+          room.style.left = rect.right - planRect.left + 'px';
+          room.style.top = rect.top - planRect.top + 'px';
+        } else {
+          room.style.left = e.pageX - offsetX + 'px';
+          room.style.top = e.pageY - offsetY + 'px';
+        }
+      });
+
+      floorplan.appendChild(room);
+    }
+
+    function getClosestRoom(x, y, currentRoom) {
+      const rooms = document.querySelectorAll('.room');
+      let closest = null;
+      let minDist = Infinity;
+      rooms.forEach(room => {
+        if (room === currentRoom) return;
+        const dist = getDistance(room, x, y);
+        if (dist < minDist) {
+          minDist = dist;
+          closest = room;
+        }
+      });
+      return closest;
+    }
+
+    function getDistance(room, x, y) {
+      const rect = room.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      return Math.sqrt((centerX - x) ** 2 + (centerY - y) ** 2);
+    }
+
+    function exportJSON() {
+      const rooms = document.querySelectorAll('.room');
+      const data = Array.from(rooms).map(room => ({
+        left: room.style.left,
+        top: room.style.top,
+        width: room.style.width,
+        height: room.style.height,
+        content: room.innerText
+      }));
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'floorplan.json';
+      link.click();
+    }
+  </script>
 </body>
 </html>
