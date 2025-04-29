@@ -29,6 +29,16 @@
       cursor: move;
       padding: 5px;
       overflow: hidden;
+      resize: none;
+    }
+    .resizer {
+      width: 10px;
+      height: 10px;
+      background: #219ebc;
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      cursor: se-resize;
     }
   </style>
 </head>
@@ -36,19 +46,16 @@
   <h1>School Floorplan Editor</h1>
   <div id="toolbar">
     <button onclick="addRoom()">➕ Add Room</button>
-    <button onclick="exportJSON()">💾 Export Layout</button>
   </div>
   <div id="floorplan"></div>
   <script>
     const floorplan = document.getElementById('floorplan');
 
     function addRoom() {
-      const width = prompt('Enter room width (px):', 100);
-      const height = prompt('Enter room height (px):', 100);
       const room = document.createElement('div');
       room.className = 'room';
-      room.style.width = width + 'px';
-      room.style.height = height + 'px';
+      room.style.width = '100px';
+      room.style.height = '100px';
       room.style.left = '50px';
       room.style.top = '50px';
       room.setAttribute('draggable', 'true');
@@ -63,58 +70,76 @@
       });
 
       room.addEventListener('dragend', (e) => {
-        const closest = getClosestRoom(e.pageX - offsetX, e.pageY - offsetY, room);
-        if (closest && getDistance(closest, e.pageX - offsetX, e.pageY - offsetY) < 20) {
-          const rect = closest.getBoundingClientRect();
-          const planRect = floorplan.getBoundingClientRect();
-          room.style.left = rect.right - planRect.left + 'px';
-          room.style.top = rect.top - planRect.top + 'px';
-        } else {
+        const snapMargin = 15;
+        const planRect = floorplan.getBoundingClientRect();
+        const rooms = Array.from(document.querySelectorAll('.room')).filter(r => r !== room);
+        let snapped = false;
+
+        for (let other of rooms) {
+          const otherRect = other.getBoundingClientRect();
+          const roomWidth = room.offsetWidth;
+          const roomHeight = room.offsetHeight;
+
+          const newLeft = e.pageX - offsetX;
+          const newTop = e.pageY - offsetY;
+
+          // Snap right to left
+          if (Math.abs((newLeft + roomWidth) - (other.offsetLeft)) < snapMargin) {
+            room.style.left = other.offsetLeft - roomWidth + 'px';
+            room.style.top = newTop + 'px';
+            snapped = true;
+            break;
+          }
+          // Snap left to right
+          if (Math.abs(newLeft - (other.offsetLeft + other.offsetWidth)) < snapMargin) {
+            room.style.left = other.offsetLeft + other.offsetWidth + 'px';
+            room.style.top = newTop + 'px';
+            snapped = true;
+            break;
+          }
+          // Snap bottom to top
+          if (Math.abs((newTop + roomHeight) - (other.offsetTop)) < snapMargin) {
+            room.style.top = other.offsetTop - roomHeight + 'px';
+            room.style.left = newLeft + 'px';
+            snapped = true;
+            break;
+          }
+          // Snap top to bottom
+          if (Math.abs(newTop - (other.offsetTop + other.offsetHeight)) < snapMargin) {
+            room.style.top = other.offsetTop + other.offsetHeight + 'px';
+            room.style.left = newLeft + 'px';
+            snapped = true;
+            break;
+          }
+        }
+
+        if (!snapped) {
           room.style.left = e.pageX - offsetX + 'px';
           room.style.top = e.pageY - offsetY + 'px';
         }
       });
 
+      // Add resizer
+      const resizer = document.createElement('div');
+      resizer.className = 'resizer';
+      room.appendChild(resizer);
+
+      resizer.addEventListener('mousedown', initResize);
+      function initResize(e) {
+        e.preventDefault();
+        window.addEventListener('mousemove', Resize, false);
+        window.addEventListener('mouseup', stopResize, false);
+      }
+      function Resize(e) {
+        room.style.width = (e.clientX - room.getBoundingClientRect().left) + 'px';
+        room.style.height = (e.clientY - room.getBoundingClientRect().top) + 'px';
+      }
+      function stopResize() {
+        window.removeEventListener('mousemove', Resize, false);
+        window.removeEventListener('mouseup', stopResize, false);
+      }
+
       floorplan.appendChild(room);
-    }
-
-    function getClosestRoom(x, y, currentRoom) {
-      const rooms = document.querySelectorAll('.room');
-      let closest = null;
-      let minDist = Infinity;
-      rooms.forEach(room => {
-        if (room === currentRoom) return;
-        const dist = getDistance(room, x, y);
-        if (dist < minDist) {
-          minDist = dist;
-          closest = room;
-        }
-      });
-      return closest;
-    }
-
-    function getDistance(room, x, y) {
-      const rect = room.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      return Math.sqrt((centerX - x) ** 2 + (centerY - y) ** 2);
-    }
-
-    function exportJSON() {
-      const rooms = document.querySelectorAll('.room');
-      const data = Array.from(rooms).map(room => ({
-        left: room.style.left,
-        top: room.style.top,
-        width: room.style.width,
-        height: room.style.height,
-        content: room.innerText
-      }));
-      const json = JSON.stringify(data, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'floorplan.json';
-      link.click();
     }
   </script>
 </body>
