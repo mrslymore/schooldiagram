@@ -21,13 +21,13 @@
       position: relative;
       background-color: #fafafa;
       overflow: hidden;
-      transform-origin: 0 0;
-      transition: transform 0.3s ease-in-out;
+      transform: scale(1);
+      transform-origin: top left;
     }
     .room {
       position: absolute;
-      background-color: #e63946; /* Red shade for your school color */
-      border: 2px solid #d32f2f; /* Darker red for contrast */
+      background-color: #e63946; /* red color */
+      border: 2px solid #8b0000;
       box-sizing: border-box;
       cursor: move;
       padding: 5px;
@@ -36,15 +36,15 @@
       justify-content: center;
       align-items: center;
       text-align: center;
+      white-space: nowrap;
       font-size: calc(10px + 0.3vw);
-      white-space: nowrap; /* Keep text on a single line unless Enter is pressed */
       max-width: 100%;
       max-height: 100%;
     }
     .resizer {
       width: 10px;
       height: 10px;
-      background: #d32f2f;
+      background: #8b0000;
       position: absolute;
       right: 0;
       bottom: 0;
@@ -67,9 +67,21 @@
     }
     #zoom-controls {
       position: fixed;
-      bottom: 80px;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+    }
+    #zoom-controls button {
+      margin: 5px;
+    }
+    #undo-redo-controls {
+      position: fixed;
+      top: 10px;
       right: 10px;
-      z-index: 999;
+      z-index: 1000;
+    }
+    #undo-redo-controls button {
+      margin: 5px;
     }
   </style>
 </head>
@@ -79,19 +91,25 @@
     <button onclick="addRoom()">➕ Add Room</button>
     <button onclick="saveLayout()">💾 Save Layout</button>
     <button onclick="loadLayout()">📂 Load Layout</button>
-    <input type="file" id="fileInput" accept=".json" style="display:none" />
   </div>
   <div id="zoom-controls">
-    <button onclick="zoomIn()">🔍 +</button>
-    <button onclick="zoomOut()">🔍 -</button>
+    <button onclick="zoomIn()">🔍 Zoom In</button>
+    <button onclick="zoomOut()">🔍 Zoom Out</button>
+  </div>
+  <div id="undo-redo-controls">
+    <button onclick="undo()">↩️ Undo</button>
+    <button onclick="redo()">🔁 Redo</button>
   </div>
   <div id="floorplan"></div>
   <div id="trash">🗑️</div>
-  
+
   <script>
     const floorplan = document.getElementById('floorplan');
     const trash = document.getElementById('trash');
-    let scale = 1; // Zoom scale
+    let scale = 1;
+
+    let undoStack = [];
+    let redoStack = [];
 
     function addRoom(data = null) {
       const room = document.createElement('div');
@@ -144,6 +162,7 @@
 
         room.style.left = newLeft + 'px';
         room.style.top = newTop + 'px';
+        updateTextSize(room);
       });
 
       window.addEventListener('mouseup', (e) => {
@@ -159,6 +178,7 @@
 
         if (overlap) {
           room.remove();
+          trackAction('remove', room);
         }
       });
 
@@ -181,7 +201,7 @@
         const newHeight = e.clientY - rect.top;
         room.style.width = newWidth + 'px';
         room.style.height = newHeight + 'px';
-        adjustTextSize(room);
+        updateTextSize(room);
       });
 
       window.addEventListener('mouseup', () => {
@@ -189,17 +209,54 @@
       });
 
       floorplan.appendChild(room);
-      adjustTextSize(room);
+      updateTextSize(room); // Update font size based on the room's size
+      trackAction('add', room);
     }
 
-    function adjustTextSize(room) {
-      const maxFontSize = 20; // Max font size
-      const roomWidth = room.offsetWidth;
-      const roomHeight = room.offsetHeight;
-
-      let fontSize = Math.min(roomWidth, roomHeight) / 6; // Adjust based on room size
-      fontSize = Math.min(fontSize, maxFontSize); // Enforce max font size
+    function updateTextSize(room) {
+      const fontSize = Math.min(room.offsetWidth / 10, room.offsetHeight / 10, 24); // Shrink text based on box size, with a max size of 24px
       room.style.fontSize = fontSize + 'px';
+    }
+
+    function zoomIn() {
+      scale += 0.1;
+      floorplan.style.transform = `scale(${scale})`;
+    }
+
+    function zoomOut() {
+      scale -= 0.1;
+      floorplan.style.transform = `scale(${scale})`;
+    }
+
+    function trackAction(action, room) {
+      undoStack.push({ action, room });
+      redoStack = []; // Clear redo stack after a new action
+    }
+
+    function undo() {
+      const lastAction = undoStack.pop();
+      if (!lastAction) return;
+
+      if (lastAction.action === 'add') {
+        lastAction.room.remove();
+        redoStack.push(lastAction);
+      } else if (lastAction.action === 'remove') {
+        addRoom(lastAction.room);
+        redoStack.push(lastAction);
+      }
+    }
+
+    function redo() {
+      const lastUndoneAction = redoStack.pop();
+      if (!lastUndoneAction) return;
+
+      if (lastUndoneAction.action === 'add') {
+        addRoom(lastUndoneAction.room);
+        undoStack.push(lastUndoneAction);
+      } else if (lastUndoneAction.action === 'remove') {
+        lastUndoneAction.room.remove();
+        undoStack.push(lastUndoneAction);
+      }
     }
 
     function saveLayout() {
@@ -249,17 +306,6 @@
       };
       reader.readAsText(file);
     });
-
-    // Zoom functionality
-    function zoomIn() {
-      scale *= 1.1;
-      floorplan.style.transform = `scale(${scale})`;
-    }
-
-    function zoomOut() {
-      scale *= 0.9;
-      floorplan.style.transform = `scale(${scale})`;
-    }
   </script>
 </body>
 </html>
