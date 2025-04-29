@@ -46,21 +46,24 @@
   <h1>School Floorplan Editor</h1>
   <div id="toolbar">
     <button onclick="addRoom()">➕ Add Room</button>
+    <button onclick="saveLayout()">💾 Save Layout</button>
+    <button onclick="loadLayout()">📂 Load Layout</button>
   </div>
   <div id="floorplan"></div>
   <script>
     const floorplan = document.getElementById('floorplan');
 
-    function addRoom() {
+    function addRoom(data = null) {
       const room = document.createElement('div');
       room.className = 'room';
-      room.style.width = '100px';
-      room.style.height = '100px';
-      room.style.left = '50px';
-      room.style.top = '50px';
       room.setAttribute('draggable', 'true');
       room.setAttribute('contenteditable', 'true');
-      room.innerText = 'Double-click to edit';
+      room.innerText = data?.text || 'Double-click to edit';
+
+      room.style.width = data?.width || '100px';
+      room.style.height = data?.height || '100px';
+      room.style.left = data?.left || '50px';
+      room.style.top = data?.top || '50px';
 
       let offsetX, offsetY;
 
@@ -71,40 +74,35 @@
 
       room.addEventListener('dragend', (e) => {
         const snapMargin = 15;
-        const planRect = floorplan.getBoundingClientRect();
         const rooms = Array.from(document.querySelectorAll('.room')).filter(r => r !== room);
         let snapped = false;
 
+        const newLeft = e.pageX - offsetX;
+        const newTop = e.pageY - offsetY;
+        const roomWidth = room.offsetWidth;
+        const roomHeight = room.offsetHeight;
+
         for (let other of rooms) {
           const otherRect = other.getBoundingClientRect();
-          const roomWidth = room.offsetWidth;
-          const roomHeight = room.offsetHeight;
 
-          const newLeft = e.pageX - offsetX;
-          const newTop = e.pageY - offsetY;
-
-          // Snap right to left
           if (Math.abs((newLeft + roomWidth) - (other.offsetLeft)) < snapMargin) {
             room.style.left = other.offsetLeft - roomWidth + 'px';
             room.style.top = newTop + 'px';
             snapped = true;
             break;
           }
-          // Snap left to right
           if (Math.abs(newLeft - (other.offsetLeft + other.offsetWidth)) < snapMargin) {
             room.style.left = other.offsetLeft + other.offsetWidth + 'px';
             room.style.top = newTop + 'px';
             snapped = true;
             break;
           }
-          // Snap bottom to top
           if (Math.abs((newTop + roomHeight) - (other.offsetTop)) < snapMargin) {
             room.style.top = other.offsetTop - roomHeight + 'px';
             room.style.left = newLeft + 'px';
             snapped = true;
             break;
           }
-          // Snap top to bottom
           if (Math.abs(newTop - (other.offsetTop + other.offsetHeight)) < snapMargin) {
             room.style.top = other.offsetTop + other.offsetHeight + 'px';
             room.style.left = newLeft + 'px';
@@ -114,12 +112,11 @@
         }
 
         if (!snapped) {
-          room.style.left = e.pageX - offsetX + 'px';
-          room.style.top = e.pageY - offsetY + 'px';
+          room.style.left = newLeft + 'px';
+          room.style.top = newTop + 'px';
         }
       });
 
-      // Add resizer
       const resizer = document.createElement('div');
       resizer.className = 'resizer';
       room.appendChild(resizer);
@@ -140,6 +137,27 @@
       }
 
       floorplan.appendChild(room);
+    }
+
+    function saveLayout() {
+      const rooms = document.querySelectorAll('.room');
+      const layout = Array.from(rooms).map(room => ({
+        left: room.style.left,
+        top: room.style.top,
+        width: room.style.width,
+        height: room.style.height,
+        text: room.innerText.trim()
+      }));
+      localStorage.setItem('floorplanLayout', JSON.stringify(layout));
+      alert('Layout saved!');
+    }
+
+    function loadLayout() {
+      const data = JSON.parse(localStorage.getItem('floorplanLayout'));
+      if (data) {
+        floorplan.innerHTML = '';
+        data.forEach(room => addRoom(room));
+      }
     }
   </script>
 </body>
