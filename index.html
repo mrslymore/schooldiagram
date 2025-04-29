@@ -101,27 +101,33 @@
         let newTop = e.clientY - floorRect.top - dragOffsetY;
 
         const snapMargin = 10;
-        const rooms = Array.from(document.querySelectorAll('.room')).filter(r => r !== room);
-
         const roomW = room.offsetWidth;
         const roomH = room.offsetHeight;
 
+        const rooms = Array.from(document.querySelectorAll('.room')).filter(r => r !== room);
         rooms.forEach(other => {
           const otherLeft = other.offsetLeft;
           const otherTop = other.offsetTop;
-          const otherW = other.offsetWidth;
-          const otherH = other.offsetHeight;
+          const otherRight = otherLeft + other.offsetWidth;
+          const otherBottom = otherTop + other.offsetHeight;
 
-          if (Math.abs(newLeft - (otherLeft + otherW)) < snapMargin) {
-            newLeft = otherLeft + otherW;
+          const thisRight = newLeft + roomW;
+          const thisBottom = newTop + roomH;
+
+          // Snap left edge to right edge of another
+          if (Math.abs(newLeft - otherRight) < snapMargin) {
+            newLeft = otherRight;
           }
-          if (Math.abs((newLeft + roomW) - otherLeft) < snapMargin) {
+          // Snap right edge to left edge of another
+          if (Math.abs(thisRight - otherLeft) < snapMargin) {
             newLeft = otherLeft - roomW;
           }
-          if (Math.abs(newTop - (otherTop + otherH)) < snapMargin) {
-            newTop = otherTop + otherH;
+          // Snap top edge to bottom edge of another
+          if (Math.abs(newTop - otherBottom) < snapMargin) {
+            newTop = otherBottom;
           }
-          if (Math.abs((newTop + roomH) - otherTop) < snapMargin) {
+          // Snap bottom edge to top edge of another
+          if (Math.abs(thisBottom - otherTop) < snapMargin) {
             newTop = otherTop - roomH;
           }
         });
@@ -129,6 +135,7 @@
         room.style.left = newLeft + 'px';
         room.style.top = newTop + 'px';
       });
+
 
       window.addEventListener('mouseup', (e) => {
         isDragging = false;
