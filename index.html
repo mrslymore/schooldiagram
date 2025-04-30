@@ -77,6 +77,9 @@
       border-radius: 8px;
       z-index: 999;
     }
+    #trash.highlight {
+      background: #d00000;
+    }
   </style>
 </head>
 <body>
@@ -188,12 +191,35 @@
 
         room.style.left = newLeft + 'px';
         room.style.top = newTop + 'px';
+
+        const trashRect = trash.getBoundingClientRect();
+        const roomRect = room.getBoundingClientRect();
+        const overlap = !(
+          roomRect.right < trashRect.left ||
+          roomRect.left > trashRect.right ||
+          roomRect.bottom < trashRect.top ||
+          roomRect.top > trashRect.bottom
+        );
+        trash.classList.toggle('highlight', overlap);
       });
 
       window.addEventListener('mouseup', () => {
         isDragging = false;
         room.style.zIndex = '';
-        recordHistory();
+        const trashRect = trash.getBoundingClientRect();
+        const roomRect = room.getBoundingClientRect();
+        const overlap = !(
+          roomRect.right < trashRect.left ||
+          roomRect.left > trashRect.right ||
+          roomRect.bottom < trashRect.top ||
+          roomRect.top > trashRect.bottom
+        );
+        if (overlap) {
+          floorplan.removeChild(room);
+        } else {
+          recordHistory();
+        }
+        trash.classList.remove('highlight');
       });
 
       const resizer = document.createElement('div');
@@ -215,7 +241,6 @@
         room.style.width = newWidth + 'px';
         room.style.height = newHeight + 'px';
 
-        // Shrink text if it overflows
         let fontSize = 16;
         while (room.scrollWidth > room.clientWidth || room.scrollHeight > room.clientHeight) {
           fontSize--;
