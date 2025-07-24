@@ -61,6 +61,7 @@
   <button onclick="saveLayout()">💾 Save</button>
   <button onclick="loadLayout()">📂 Load</button>
   <button onclick="downloadJSON()">⬇️ Download</button>
+  <button onclick="exportPNG()">Export PNG</button>
   <input type="file" id="fileInput" style="display:none" onchange="loadFromFile(event)" />
 </div>
 
@@ -404,6 +405,56 @@ function loadFromFile(event) {
   };
   reader.readAsText(file);
 }
+
+  function exportPNG() {
+  // To get a high-res export, we can temporarily create a larger offscreen canvas:
+  const exportScale = 2; // double resolution
+  const exportCanvas = document.createElement('canvas');
+  exportCanvas.width = canvas.width * exportScale;
+  exportCanvas.height = canvas.height * exportScale;
+  const exportCtx = exportCanvas.getContext('2d');
+
+  // Clear and scale
+  exportCtx.clearRect(0, 0, exportCanvas.width, exportCanvas.height);
+  exportCtx.scale(exportScale * zoom, exportScale * zoom);
+
+  // Draw all rooms on the export canvas
+  rooms.forEach(r => {
+    exportCtx.fillStyle = r.color;
+    exportCtx.fillRect(r.x, r.y, r.w, r.h);
+
+    exportCtx.strokeStyle = "black";
+    exportCtx.lineWidth = 2;
+    exportCtx.strokeRect(r.x, r.y, r.w, r.h);
+
+    exportCtx.fillStyle = "black";
+    exportCtx.font = `${r.fontSize}px sans-serif`;
+
+    // Simple wrap text helper like your draw function
+    const words = r.text.split(" ");
+    let line = "";
+    let y = r.y + 20;
+    for (let i = 0; i < words.length; i++) {
+      const testLine = line + words[i] + " ";
+      if (exportCtx.measureText(testLine).width > r.w - 10 && i > 0) {
+        exportCtx.fillText(line, r.x + 5, y);
+        line = words[i] + " ";
+        y += r.fontSize + 4;
+      } else {
+        line = testLine;
+      }
+    }
+    exportCtx.fillText(line, r.x + 5, y);
+  });
+
+  // Trigger download
+  const dataURL = exportCanvas.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = dataURL;
+  a.download = "floorplan.png";
+  a.click();
+}
+
 
 // Open file picker when Load button is right-clicked
 document.querySelector("button[onclick='loadLayout()']").addEventListener("contextmenu", e => {
