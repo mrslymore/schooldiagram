@@ -41,7 +41,6 @@
     position: relative;
     width: 2000px;
     height: 1400px;
-    transform-origin: top left;
     background: #fff;
     border: 1px solid #ccc;
   }
@@ -113,9 +112,8 @@
   <button id="zoomInBtn">🔍➕ Zoom In</button>
   <button id="zoomOutBtn">🔍➖ Zoom Out</button>
   <button id="saveBtn">💾 Save</button>
-  <button id="loadBtn">📂 Load</button>
+  <button id="loadBtn">📂 Load from LocalStorage</button>
   <button id="exportBtn">🖼️ Export PNG</button>
-  <input type="file" id="loadInput" accept=".json" style="display:none" />
 </div>
 
 <div id="canvas-container">
@@ -166,7 +164,6 @@
   const saveBtn = document.getElementById('saveBtn');
   const loadBtn = document.getElementById('loadBtn');
   const exportBtn = document.getElementById('exportBtn');
-  const loadInput = document.getElementById('loadInput');
 
   const sidebar = document.getElementById('sidebar');
   const propFontFamily = document.getElementById('propFontFamily');
@@ -182,12 +179,14 @@
   let undoStack = [];
   let redoStack = [];
 
+  // Zoom scale and canvas size for zooming by expanding canvas container
   let scale = 1;
+  let baseCanvasWidth = 2000;
+  let baseCanvasHeight = 1400;
 
   // -- UTILS --
 
   function saveState() {
-    // Save current state snapshot to undo stack, clear redo stack
     const state = rooms.map(r => serializeRoom(r));
     undoStack.push(state);
     redoStack = [];
@@ -208,7 +207,7 @@
   }
 
   function updateUndoRedoButtons() {
-    undoBtn.disabled = undoStack.length === 0;
+    undoBtn.disabled = undoStack.length <= 1;
     redoBtn.disabled = redoStack.length === 0;
   }
 
@@ -216,9 +215,7 @@
     try {
       const state = rooms.map(r => serializeRoom(r));
       localStorage.setItem('roomLayout', JSON.stringify(state));
-    } catch {
-      // Ignore storage errors
-    }
+    } catch {}
   }
 
   function loadFromLocalStorage() {
@@ -230,9 +227,7 @@
         redoStack = [];
         saveState();
       }
-    } catch {
-      // Ignore errors
-    }
+    } catch {}
   }
 
   // -- ROOM SERIALIZATION --
@@ -325,10 +320,8 @@
     let dragOffsetY = 0;
 
     room.addEventListener('mousedown', e => {
-      // Only start drag if target is the room itself (not resizing)
       if (e.target !== room) return;
 
-      // Support multi-select with Shift key
       if (!e.shiftKey && !selectedRooms.has(room)) {
         clearSelection();
       }
@@ -346,8 +339,6 @@
       const x = e.clientX - dragOffsetX;
       const y = e.clientY - dragOffsetY;
 
-      // Move all selected rooms by the delta between current and previous positions
-      // We'll move the dragged room to x,y, and calculate delta for others relative to dragged room old pos
       const draggedRoom = [...selectedRooms][0];
       if (!draggedRoom) return;
 
@@ -369,14 +360,10 @@
       }
     });
 
-    // Resizing with CSS 'resize: both' and overflow auto on the .room div means browser native handles it.
-    // We just listen to input events on contentEditable to save changes.
-
     room.addEventListener('input', e => {
       saveState();
     });
 
-    // Prevent drag selection inside contenteditable text
     room.addEventListener('mousedown', e => {
       e.stopPropagation();
     });
@@ -391,11 +378,8 @@
     }
     sidebar.style.display = 'block';
 
-    // Show combined properties or default to first selected room
     const arr = Array.from(selectedRooms);
     const first = arr[0];
-
-    // For each property, if all selected rooms share same value, show it; else empty
 
     function uniformProperty(prop) {
       const val = first.style[prop];
@@ -462,11 +446,16 @@
 
   function zoomIn() {
     scale = Math.min(5, scale * 1.2);
-    canvas.style.transform = `scale(${scale})`;
+    updateCanvasSize();
   }
   function zoomOut() {
     scale = Math.max(0.2, scale / 1.2);
-    canvas.style.transform = `scale(${scale})`;
+    updateCanvasSize();
+  }
+
+  function updateCanvasSize() {
+    canvas.style.width = baseCanvasWidth * scale + 'px';
+    canvas.style.height = baseCanvasHeight * scale + 'px';
   }
 
   // -- SAVE / LOAD --
@@ -486,34 +475,8 @@
   }
 
   function loadLayout() {
-    loadInput.value = '';
-    loadInput.click();
+    loadFromLocalStorage();
   }
-
-  loadInput.addEventListener('change', () => {
-    const file = loadInput.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const data = JSON.parse(e.target.result);
-        if (!Array.isArray(data)) throw new Error('Invalid format');
-        clearCanvas();
-        data.forEach(d => {
-          const room = createRoomElement(d);
-          canvas.appendChild(room);
-          rooms.push(room);
-        });
-        selectedRooms.clear();
-        updateSelectionUI();
-        saveState();
-      } catch (err) {
-        alert('Failed to load layout: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
-  });
 
   // -- EXPORT PNG --
 
@@ -559,7 +522,7 @@
   // -- UNDO / REDO --
 
   undoBtn.addEventListener('click', () => {
-    if (undoStack.length <= 1) return; // nothing to undo (first state)
+    if (undoStack.length <= 1) return;
     const current = undoStack.pop();
     redoStack.push(current);
     const prev = undoStack[undoStack.length - 1];
@@ -583,7 +546,6 @@
   // -- SELECTION VIA CANVAS CLICK (deselect) --
 
   canvas.addEventListener('mousedown', e => {
-    // If clicking outside rooms, clear selection
     if (e.target === canvas) {
       clearSelection();
     }
@@ -596,25 +558,16 @@
     rooms = [];
   }
 
-  // -- SELECTION UPDATE UI --
-
-  function updateSelectionUI() {
-    rooms.forEach(room => {
-      if (selectedRooms.has(room)) room.classList.add('selected');
-      else room.classList.remove('selected');
-    });
-    updateSidebar();
-  }
-
   // -- INITIAL LOAD --
 
   loadFromLocalStorage();
+  updateCanvasSize();
 
   // Save initial empty state so undo works properly
   if (undoStack.length === 0) saveState();
 
-  // --- END IIFE ---
 })();
 </script>
+
 </body>
 </html>
