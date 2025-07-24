@@ -231,6 +231,8 @@ canvas.onmousedown = (e) => {
         resizeIndex = i;
         initialWidth = r.w;
         initialHeight = r.h;
+        startX = mx;
+        startY = my;
         return;
     }
   }
@@ -271,8 +273,10 @@ canvas.onmousemove = (e) => {
 
  if (resizing && resizeIndex !== -1) {
   let r = rooms[resizeIndex];
-  r.w = Math.max(30, initialWidth + dx);
-  r.h = Math.max(30, initialHeight + dy);
+  let newW = Math.max(30, initialWidth + (mx - startX));
+  let newH = Math.max(30, initialHeight + (my - startY));
+  r.w = newW;
+  r.h = newH;
   } else if (dragging) {
     selected.forEach(i => {
       rooms[i].x += dx;
