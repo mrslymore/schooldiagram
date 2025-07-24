@@ -210,30 +210,46 @@ function wrapText(text, x, y, maxWidth, lineHeight) {
 
 // ----------- Mouse Interaction -----------
 
-canvas.onmousedown = (e) => {
+canvas.onmousemove = (e) => {
   const rect = canvas.getBoundingClientRect();
   const mx = (e.clientX - rect.left) / zoom;
   const my = (e.clientY - rect.top) / zoom;
+
+  let hoveringResize = false;
+
+  if (!dragging && !resizing) {
+    for (let r of rooms) {
+      if (
+        mx >= r.x + r.w - 10 && mx <= r.x + r.w &&
+        my >= r.y + r.h - 10 && my <= r.y + r.h
+      ) {
+        hoveringResize = true;
+        break;
+      }
+    }
+    canvas.style.cursor = hoveringResize ? 'nwse-resize' : 'default';
+    return; // Don't continue unless dragging/resizing
+  }
+
+  const dx = mx - startX;
+  const dy = my - startY;
+
+  if (resizing && resizeIndex !== -1) {
+    const r = rooms[resizeIndex];
+    r.w = Math.max(30, initialWidth + dx);
+    r.h = Math.max(30, initialHeight + dy);
+    draw();
+  } else if (dragging) {
+    selected.forEach(i => {
+      rooms[i].x += dx;
+      rooms[i].y += dy;
+    });
+    draw();
+  }
+
   startX = mx;
   startY = my;
-
-  // Check if clicking resize handle of any selected room
-for (let i = rooms.length - 1; i >= 0; i--) {
-    let r = rooms[i];
-    let handleX = r.x + r.w - 10;
-    let handleY = r.y + r.h - 10;
-
-    // Check if click is in resize handle (10x10 square)
-    if (mx >= handleX && mx <= r.x + r.w &&
-        my >= handleY && my <= r.y + r.h) {
-        resizing = true;
-        resizeIndex = i;
-        initialWidth = r.w;
-        initialHeight = r.h;
-        startX = mx;
-        startY = my;
-        return;
-    }
+};
 
     // Check if click is inside the room for dragging
     if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
@@ -297,7 +313,7 @@ canvas.style.cursor = hoveringResize ? 'nwse-resize' : 'default';
 
     r.w = Math.max(30, initialWidth + deltaX);
     r.h = Math.max(30, initialHeight + deltaY);
-    drawRooms();
+    draw();
   } else if (dragging) {
     selected.forEach(i => {
       rooms[i].x += dx;
