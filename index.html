@@ -354,7 +354,13 @@
 
     function applyRoomSettings() {
       if (!currentRoom) return;
-      currentRoom.innerText = document.getElementById('roomText').value;
+      // Only update the text node, preserving the resizer
+      const textValue = document.getElementById('roomText').value;
+      const resizer = currentRoom.querySelector('.resizer');
+      currentRoom.innerHTML = ''; // Clear all contents
+      currentRoom.append(textValue);
+      currentRoom.appendChild(resizer); // Re-add the resizer
+
       currentRoom.style.backgroundColor = document.getElementById('roomColor').value;
       currentRoom.style.fontSize = document.getElementById('roomFontSize').value + 'px';
       closeRoomSettings();
