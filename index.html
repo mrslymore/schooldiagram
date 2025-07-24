@@ -218,15 +218,14 @@ canvas.onmousedown = (e) => {
   startY = my;
 
   // Check if clicking resize handle of any selected room
-  for (let i = rooms.length -1; i >= 0; i--) {
-    if (!selected.includes(i)) continue;
+for (let i = rooms.length - 1; i >= 0; i--) {
     let r = rooms[i];
-       if (
-        mx >= r.x + r.w - 10 &&
-        mx <= r.x + r.w &&
-        my >= r.y + r.h - 10 &&
-        my <= r.y + r.h
-      ) {
+    let handleX = r.x + r.w - 10;
+    let handleY = r.y + r.h - 10;
+
+    // Check if click is in resize handle (10x10 square)
+    if (mx >= handleX && mx <= r.x + r.w &&
+        my >= handleY && my <= r.y + r.h) {
         resizing = true;
         resizeIndex = i;
         initialWidth = r.w;
@@ -235,7 +234,16 @@ canvas.onmousedown = (e) => {
         startY = my;
         return;
     }
-  }
+
+    // Check if click is inside the room for dragging
+    if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+        dragging = true;
+        dragIndex = i;
+        offsetX = mx - r.x;
+        offsetY = my - r.y;
+        return;
+    }
+}
 
   // Check if clicking inside any room
   let found = false;
@@ -271,12 +279,25 @@ canvas.onmousemove = (e) => {
   const dx = mx - startX;
   const dy = my - startY;
 
- if (resizing && resizeIndex !== -1) {
-  let r = rooms[resizeIndex];
-  let newW = Math.max(30, initialWidth + (mx - startX));
-  let newH = Math.max(30, initialHeight + (my - startY));
-  r.w = newW;
-  r.h = newH;
+if (resizing && resizeIndex !== -1) {
+    let r = rooms[resizeIndex];
+    let deltaX = mx - startX;
+    let deltaY = my - startY;
+    let hoveringResize = false;
+    for (let r of rooms) {
+    if (
+        mx >= r.x + r.w - 10 && mx <= r.x + r.w &&
+        my >= r.y + r.h - 10 && my <= r.y + r.h
+    ) {
+        hoveringResize = true;
+        break;
+    }
+}
+canvas.style.cursor = hoveringResize ? 'nwse-resize' : 'default';
+
+    r.w = Math.max(30, initialWidth + deltaX);
+    r.h = Math.max(30, initialHeight + deltaY);
+    drawRooms();
   } else if (dragging) {
     selected.forEach(i => {
       rooms[i].x += dx;
