@@ -220,19 +220,19 @@ canvas.onmousemove = (e) => {
 
   let hoveringResize = false;
 
-  if (!dragging && !resizing) {
-    for (let r of rooms) {
-      if (
-        mx >= r.x + r.w - 10 && mx <= r.x + r.w &&
-        my >= r.y + r.h - 10 && my <= r.y + r.h
-      ) {
-        hoveringResize = true;
-        break;
-      }
+  // Change cursor if hovering over resize handle
+  for (let r of rooms) {
+    if (
+      mx >= r.x + r.w - 10 && mx <= r.x + r.w &&
+      my >= r.y + r.h - 10 && my <= r.y + r.h
+    ) {
+      hoveringResize = true;
+      break;
     }
-    canvas.style.cursor = hoveringResize ? 'nwse-resize' : 'default';
-    return; // Don't continue unless dragging/resizing
   }
+  canvas.style.cursor = hoveringResize ? 'nwse-resize' : (dragging ? 'move' : 'default');
+
+  if (!dragging && !resizing) return;
 
   const dx = mx - startX;
   const dy = my - startY;
@@ -253,6 +253,7 @@ canvas.onmousemove = (e) => {
   startX = mx;
   startY = my;
 };
+
 
     // Check if click is inside the room for dragging
     if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
@@ -290,28 +291,6 @@ canvas.onmousemove = (e) => {
   }
 };
 
-canvas.onmousemove = (e) => {
-  if (!dragging && !resizing) return;
-  const rect = canvas.getBoundingClientRect();
-  const mx = (e.clientX - rect.left) / zoom;
-  const my = (e.clientY - rect.top) / zoom;
-  const dx = mx - startX;
-  const dy = my - startY;
-
-if (resizing && resizeIndex !== -1) {
-    let r = rooms[resizeIndex];
-    let deltaX = mx - startX;
-    let deltaY = my - startY;
-    let hoveringResize = false;
-    for (let r of rooms) {
-    if (
-        mx >= r.x + r.w - 10 && mx <= r.x + r.w &&
-        my >= r.y + r.h - 10 && my <= r.y + r.h
-    ) {
-        hoveringResize = true;
-        break;
-    }
-}
 canvas.style.cursor = hoveringResize ? 'nwse-resize' : 'default';
 
     r.w = Math.max(30, initialWidth + deltaX);
