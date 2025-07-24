@@ -89,6 +89,8 @@ let resizing = false;
 let resizeIndex = -1;
 let startX, startY;
 let zoom = 1;
+let lastColor = "#aaf";
+
 
 let settingsModal = document.getElementById("settingsModal");
 let colorInput = document.getElementById("colorInput");
@@ -140,7 +142,7 @@ function addRoom() {
   rooms.push({
     x: 100, y: 100, w: 150, h: 100,
     text: "New Room",
-    color: "#aaf",
+    color: lastColor,    // use last chosen color here
     fontSize: 16
   });
   draw();
@@ -289,8 +291,10 @@ canvas.onmouseup = () => {
 
 function openSettings() {
   if (selected.length === 0) return alert("Select a room to edit");
+  // Ignore the room color, always use lastColor:
+  colorInput.value = lastColor;
+  // But still load font size and text from first selected room:
   const r = rooms[selected[0]];
-  colorInput.value = r.color;
   fontSizeInput.value = r.fontSize;
   roomTextInput.value = r.text;
   settingsModal.style.display = "block";
@@ -302,15 +306,15 @@ function closeSettings() {
 
 function applySettings() {
   saveState();
+  lastColor = colorInput.value; // Update global color
   selected.forEach(i => {
-    rooms[i].color = colorInput.value;
+    rooms[i].color = lastColor;
     rooms[i].fontSize = parseInt(fontSizeInput.value) || 16;
     rooms[i].text = roomTextInput.value;
   });
   closeSettings();
   draw();
 }
-
 // -------- Layering ----------
 
 function bringForward() {
