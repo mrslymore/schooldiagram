@@ -1,195 +1,187 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Room Layout Editor</title>
   <style>
-    body { font-family: sans-serif; margin: 0; padding: 0; }
-    #toolbar {
+    body {
+      font-family: sans-serif;
+      margin: 0;
       display: flex;
-      gap: 8px;
+      flex-direction: column;
+      height: 100vh;
+    }
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
       padding: 10px;
-      background: #eee;
-      border-bottom: 1px solid #ccc;
+      background: #f0f0f0;
     }
-    canvas {
-      border: 1px solid #ccc;
-      cursor: crosshair;
+    #controls > * {
+      margin: 5px;
     }
-    button, input[type="file"] {
-      padding: 6px 12px;
-      font-size: 14px;
+    #canvas {
+      flex: 1;
+      position: relative;
+      background: #fff;
+      border-top: 1px solid #ccc;
+      overflow: scroll;
+    }
+    .room {
+      position: absolute;
+      border: 2px solid black;
+      background-color: rgba(0, 128, 255, 0.5);
+      padding: 5px;
+      resize: both;
+      overflow: auto;
+    }
+    .selected {
+      outline: 2px dashed red;
     }
   </style>
 </head>
 <body>
-  <div id="toolbar">
-    <button onclick="addRoom()">Add Room</button>
-    <button onclick="undo()">Undo</button>
-    <button onclick="redo()">Redo</button>
-    <button onclick="saveLayout()">Save JSON</button>
-    <input type="file" id="loadInput" accept=".json" onchange="loadLayout(event)" style="display:none">
-    <button onclick="document.getElementById('loadInput').click()">Load JSON</button>
-    <button onclick="exportPNG()">Export PNG</button>
-    <button onclick="zoomIn()">Zoom In</button>
-    <button onclick="zoomOut()">Zoom Out</button>
+  <div id="controls">
+    <button id="addRoomBtn">Add Room</button>
+    <button id="saveBtn">💾 Save</button>
+    <input type="file" id="loadInput" accept="application/json" style="display:none" />
+    <button id="loadBtn">📂 Load</button>
+    <button id="exportBtn">🖼️ Export PNG</button>
+    <button id="clearBtn">🗑️ Clear All</button>
   </div>
-  <canvas id="canvas" width="1200" height="800"></canvas>
+  <div id="canvas"></div>
 
   <script>
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
+    const addRoomBtn = document.getElementById('addRoomBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const loadBtn = document.getElementById('loadBtn');
+    const loadInput = document.getElementById('loadInput');
+    const exportBtn = document.getElementById('exportBtn');
+    const clearBtn = document.getElementById('clearBtn');
 
     let rooms = [];
-    let undoStack = [], redoStack = [];
-    let selectedRooms = [];
-    let dragging = false, offsetX = 0, offsetY = 0;
-    let scale = 1;
+    let selectedRoom = null;
 
-    const saveState = () => {
-      undoStack.push(JSON.stringify(rooms));
-      redoStack = [];
-    };
+    function createRoom(data = {}) {
+      const room = document.createElement('div');
+      room.className = 'room';
+      room.contentEditable = true;
+      room.style.left = data.left || '50px';
+      room.style.top = data.top || '50px';
+      room.style.width = data.width || '100px';
+      room.style.height = data.height || '100px';
+      room.innerText = data.text || 'Room';
+      room.style.backgroundColor = data.color || 'rgba(0,128,255,0.5)';
+      canvas.appendChild(room);
+      makeDraggable(room);
 
-    const restoreState = (stackFrom, stackTo) => {
-      if (stackFrom.length === 0) return;
-      stackTo.push(JSON.stringify(rooms));
-      rooms = JSON.parse(stackFrom.pop());
-      selectedRooms = [];
-      draw();
-    };
+      room.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectRoom(room);
+      });
 
-    function undo() { restoreState(undoStack, redoStack); }
-    function redo() { restoreState(redoStack, undoStack); }
-
-    function addRoom() {
-      saveState();
-      rooms.push({ x: 50, y: 50, width: 100, height: 80, name: "Room", color: "#ffcc00" });
-      draw();
+      rooms.push(room);
     }
 
-    function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.save();
-      ctx.scale(scale, scale);
+    function selectRoom(room) {
+      rooms.forEach(r => r.classList.remove('selected'));
+      selectedRoom = room;
+      room.classList.add('selected');
+    }
 
-      for (const room of rooms) {
-        ctx.fillStyle = room.color;
-        ctx.fillRect(room.x, room.y, room.width, room.height);
-        ctx.strokeStyle = selectedRooms.includes(room) ? 'blue' : 'black';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(room.x, room.y, room.width, room.height);
+    function makeDraggable(el) {
+      let offsetX, offsetY, isDragging = false;
 
-        ctx.fillStyle = 'black';
-        ctx.font = '14px sans-serif';
-        const lines = room.name.split("\n");
-        lines.forEach((line, i) => {
-          ctx.fillText(line, room.x + 4, room.y + 20 + i * 16);
-        });
-      }
+      el.addEventListener('mousedown', (e) => {
+        if (e.target === el) {
+          isDragging = true;
+          offsetX = e.offsetX;
+          offsetY = e.offsetY;
+        }
+      });
 
-      ctx.restore();
+      document.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+          el.style.left = `${e.pageX - offsetX}px`;
+          el.style.top = `${e.pageY - offsetY}px`;
+        }
+      });
+
+      document.addEventListener('mouseup', () => isDragging = false);
     }
 
     function saveLayout() {
-      const dataStr = JSON.stringify(rooms, null, 2);
-      const blob = new Blob([dataStr], { type: "application/json" });
+      const layout = rooms.map(room => ({
+        text: room.innerText,
+        left: room.style.left,
+        top: room.style.top,
+        width: room.style.width,
+        height: room.style.height,
+        color: room.style.backgroundColor
+      }));
+      localStorage.setItem('roomLayout', JSON.stringify(layout));
+
+      const blob = new Blob([JSON.stringify(layout, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'room-layout.json';
+      a.download = 'room_layout.json';
       a.click();
       URL.revokeObjectURL(url);
     }
 
-    function loadLayout(event) {
-      const file = event.target.files[0];
-      if (!file) return;
+    function loadLayout(layout) {
+      clearAll();
+      layout.forEach(data => createRoom(data));
+    }
 
+    function exportToPNG() {
+      html2canvas(canvas).then(canvasEl => {
+        const a = document.createElement('a');
+        a.download = 'layout.png';
+        a.href = canvasEl.toDataURL();
+        a.click();
+      });
+    }
+
+    function clearAll() {
+      rooms.forEach(r => r.remove());
+      rooms = [];
+      selectedRoom = null;
+    }
+
+    addRoomBtn.addEventListener('click', () => createRoom());
+    saveBtn.addEventListener('click', saveLayout);
+    loadBtn.addEventListener('click', () => loadInput.click());
+    loadInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
       const reader = new FileReader();
-      reader.onload = e => {
+      reader.onload = (e) => {
         try {
-          saveState();
-          rooms = JSON.parse(e.target.result);
-          selectedRooms = [];
-          draw();
-        } catch (err) {
-          alert("Invalid JSON file");
+          const layout = JSON.parse(e.target.result);
+          loadLayout(layout);
+        } catch {
+          alert('Invalid JSON file.');
         }
       };
       reader.readAsText(file);
-    }
+    });
+    exportBtn.addEventListener('click', exportToPNG);
+    clearBtn.addEventListener('click', clearAll);
 
-    function exportPNG() {
-      const link = document.createElement('a');
-      link.download = 'layout.png';
-      link.href = canvas.toDataURL();
-      link.click();
-    }
-
-    function zoomIn() {
-      scale *= 1.1;
-      draw();
-    }
-
-    function zoomOut() {
-      scale /= 1.1;
-      draw();
-    }
-
-    function getMousePos(e) {
-      const rect = canvas.getBoundingClientRect();
-      return {
-        x: (e.clientX - rect.left) / scale,
-        y: (e.clientY - rect.top) / scale
-      };
-    }
-
-    canvas.addEventListener('mousedown', e => {
-      const { x, y } = getMousePos(e);
-      selectedRooms = rooms.filter(r => x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height);
-      if (selectedRooms.length > 0) {
-        dragging = true;
-        offsetX = x - selectedRooms[0].x;
-        offsetY = y - selectedRooms[0].y;
-      }
-      draw();
+    canvas.addEventListener('click', () => {
+      rooms.forEach(r => r.classList.remove('selected'));
+      selectedRoom = null;
     });
 
-    canvas.addEventListener('mousemove', e => {
-      if (!dragging || selectedRooms.length === 0) return;
-      const { x, y } = getMousePos(e);
-      for (let room of selectedRooms) {
-        room.x = x - offsetX;
-        room.y = y - offsetY;
-      }
-      draw();
+    window.addEventListener('load', () => {
+      const saved = localStorage.getItem('roomLayout');
+      if (saved) loadLayout(JSON.parse(saved));
     });
-
-    canvas.addEventListener('mouseup', () => {
-      if (dragging) saveState();
-      dragging = false;
-    });
-
-    // Keyboard shortcuts: delete and multi-line rename
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Delete') {
-        saveState();
-        rooms = rooms.filter(r => !selectedRooms.includes(r));
-        selectedRooms = [];
-        draw();
-      } else if (e.key === 'Enter' && selectedRooms.length === 1) {
-        const newName = prompt("Enter new room name (use \n for multiple lines):", selectedRooms[0].name);
-        if (newName != null) {
-          saveState();
-          selectedRooms[0].name = newName;
-          draw();
-        }
-      }
-    });
-
-    draw();
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </body>
 </html>
