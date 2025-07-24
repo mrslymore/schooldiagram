@@ -91,6 +91,8 @@ let resizeIndex = -1;
 let startX, startY;
 let zoom = 1;
 let lastColor = "#aaf";
+let initialWidth = 0;
+let initialHeight = 0;
 
 
 let settingsModal = document.getElementById("settingsModal");
@@ -219,15 +221,17 @@ canvas.onmousedown = (e) => {
   for (let i = rooms.length -1; i >= 0; i--) {
     if (!selected.includes(i)) continue;
     let r = rooms[i];
-    if (
-      mx >= r.x + r.w - 10 &&
-      mx <= r.x + r.w &&
-      my >= r.y + r.h -10 &&
-      my <= r.y + r.h
-    ) {
-      resizing = true;
-      resizeIndex = i;
-      return;
+       if (
+        mx >= r.x + r.w - 10 &&
+        mx <= r.x + r.w &&
+        my >= r.y + r.h - 10 &&
+        my <= r.y + r.h
+      ) {
+        resizing = true;
+        resizeIndex = i;
+        initialWidth = r.w;
+        initialHeight = r.h;
+        return;
     }
   }
 
@@ -265,10 +269,10 @@ canvas.onmousemove = (e) => {
   const dx = mx - startX;
   const dy = my - startY;
 
-  if (resizing && resizeIndex !== -1) {
-    let r = rooms[resizeIndex];
-    r.w = Math.max(30, r.w + dx);
-    r.h = Math.max(30, r.h + dy);
+ if (resizing && resizeIndex !== -1) {
+  let r = rooms[resizeIndex];
+  r.w = Math.max(30, initialWidth + dx);
+  r.h = Math.max(30, initialHeight + dy);
   } else if (dragging) {
     selected.forEach(i => {
       rooms[i].x += dx;
