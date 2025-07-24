@@ -1,572 +1,319 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Room Layout Editor with Sidebar</title>
-<style>
-  /* Basic layout */
-  body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  #toolbar {
-    background: #eee;
-    padding: 8px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    border-bottom: 1px solid #ccc;
-  }
-
-  button {
-    cursor: pointer;
-    padding: 6px 12px;
-    user-select: none;
-  }
-
-  #canvas-container {
-    flex: 1;
-    position: relative;
-    overflow: auto;
-    background: #fafafa;
-  }
-
-  #canvas {
-    position: relative;
-    width: 2000px;
-    height: 1400px;
-    background: #fff;
-    border: 1px solid #ccc;
-  }
-
-  .room {
-    position: absolute;
-    border: 2px solid #0077cc;
-    background-color: #80bfff;
-    padding: 6px;
-    resize: both;
-    overflow: auto;
-    min-width: 80px;
-    min-height: 50px;
-    box-sizing: border-box;
-    cursor: move;
-    user-select: text;
-    white-space: pre-wrap; /* multiline */
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    font-weight: normal;
-    color: black;
-  }
-
-  .room.selected {
-    outline: 3px dashed red;
-    z-index: 1000 !important;
-  }
-
-  #sidebar {
-    position: fixed;
-    top: 48px; /* below toolbar */
-    right: 0;
-    width: 280px;
-    height: calc(100vh - 48px);
-    background: #fafafa;
-    border-left: 1px solid #ccc;
-    padding: 12px;
-    box-sizing: border-box;
-    font-size: 14px;
-    display: none;
-    overflow-y: auto;
-  }
-
-  #sidebar h3 {
-    margin-top: 0;
-  }
-
-  #sidebar label {
-    display: block;
-    margin: 10px 0 4px;
-  }
-
-  #sidebar input, #sidebar select {
-    width: 100%;
-    padding: 6px;
-    box-sizing: border-box;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Room Designer</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      background: #f8f8f8;
+      cursor: default;
+    }
+    .floating-toolbar {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+      z-index: 10;
+    }
+    .floating-toolbar button,
+    .floating-toolbar input {
+      margin: 5px 0;
+      width: 120px;
+    }
+    #settingsModal {
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      border: 1px solid #aaa;
+      padding: 15px;
+      display: none;
+      z-index: 100;
+    }
+  </style>
 </head>
 <body>
 
-<div id="toolbar">
-  <button id="addRoomBtn">Add Room</button>
-  <button id="trashBtn">🗑️ Trash Selected</button>
-  <button id="bringForwardBtn">⬆️ Bring Forward</button>
-  <button id="sendBackwardBtn">⬇️ Send Backward</button>
-  <button id="undoBtn">↩️ Undo</button>
-  <button id="redoBtn">↪️ Redo</button>
-  <button id="zoomInBtn">🔍➕ Zoom In</button>
-  <button id="zoomOutBtn">🔍➖ Zoom Out</button>
-  <button id="saveBtn">💾 Save</button>
-  <button id="loadBtn">📂 Load from LocalStorage</button>
-  <button id="exportBtn">🖼️ Export PNG</button>
+<div class="floating-toolbar">
+  <button onclick="addRoom()">➕ Add Room</button>
+  <button onclick="trashSelected()">🗑️ Trash</button>
+  <button onclick="bringForward()">⬆️ Forward</button>
+  <button onclick="sendBackward()">⬇️ Backward</button>
+  <button onclick="openSettings()">⚙️ Settings</button>
+  <hr />
+  <button onclick="undo()">↩️ Undo</button>
+  <button onclick="redo()">↪️ Redo</button>
+  <button onclick="zoomIn()">➕ Zoom In</button>
+  <button onclick="zoomOut()">➖ Zoom Out</button>
+  <hr />
+  <button onclick="saveLayout()">💾 Save</button>
+  <button onclick="loadLayout()">📂 Load</button>
+  <button onclick="downloadJSON()">⬇️ Download</button>
+  <input type="file" id="fileInput" style="display:none" onchange="loadFromFile(event)" />
 </div>
 
-<div id="canvas-container">
-  <div id="canvas"></div>
+<div id="settingsModal">
+  <h3>Room Settings</h3>
+  <label>Color: <input type="color" id="colorInput" /></label><br>
+  <label>Font Size: <input type="number" id="fontSizeInput" min="8" max="48" /></label><br>
+  <label>Text: <textarea id="roomTextInput" rows="3"></textarea></label><br>
+  <button onclick="applySettings()">Apply</button>
+  <button onclick="closeSettings()">Close</button>
 </div>
 
-<div id="sidebar">
-  <h3>Properties</h3>
-  <label for="propFontFamily">Font Family</label>
-  <select id="propFontFamily">
-    <option value="Arial, sans-serif">Arial</option>
-    <option value="Georgia, serif">Georgia</option>
-    <option value="'Courier New', monospace">Courier New</option>
-    <option value="'Times New Roman', serif">Times New Roman</option>
-  </select>
+<canvas id="canvas"></canvas>
 
-  <label for="propFontSize">Font Size (px)</label>
-  <input type="number" id="propFontSize" min="8" max="72" value="14" />
-
-  <label for="propFontWeight">Font Weight</label>
-  <select id="propFontWeight">
-    <option value="normal">Normal</option>
-    <option value="bold">Bold</option>
-    <option value="lighter">Lighter</option>
-  </select>
-
-  <label for="propTextColor">Text Color</label>
-  <input type="color" id="propTextColor" value="#000000" />
-
-  <label for="propBgColor">Background Color</label>
-  <input type="color" id="propBgColor" value="#80bfff" />
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
-(() => {
-  const canvas = document.getElementById('canvas');
-  const canvasContainer = document.getElementById('canvas-container');
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-  const addRoomBtn = document.getElementById('addRoomBtn');
-  const trashBtn = document.getElementById('trashBtn');
-  const bringForwardBtn = document.getElementById('bringForwardBtn');
-  const sendBackwardBtn = document.getElementById('sendBackwardBtn');
-  const undoBtn = document.getElementById('undoBtn');
-  const redoBtn = document.getElementById('redoBtn');
-  const zoomInBtn = document.getElementById('zoomInBtn');
-  const zoomOutBtn = document.getElementById('zoomOutBtn');
-  const saveBtn = document.getElementById('saveBtn');
-  const loadBtn = document.getElementById('loadBtn');
-  const exportBtn = document.getElementById('exportBtn');
+let rooms = [];
+let history = [];
+let redoStack = [];
+let selected = [];
+let dragging = false;
+let resizing = false;
+let startX, startY;
+let zoom = 1;
 
-  const sidebar = document.getElementById('sidebar');
-  const propFontFamily = document.getElementById('propFontFamily');
-  const propFontSize = document.getElementById('propFontSize');
-  const propFontWeight = document.getElementById('propFontWeight');
-  const propTextColor = document.getElementById('propTextColor');
-  const propBgColor = document.getElementById('propBgColor');
+let settingsModal = document.getElementById("settingsModal");
+let colorInput = document.getElementById("colorInput");
+let fontSizeInput = document.getElementById("fontSizeInput");
+let roomTextInput = document.getElementById("roomTextInput");
 
-  let rooms = [];
-  let selectedRooms = new Set();
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  draw();
+}
+window.onresize = resizeCanvas;
+resizeCanvas();
 
-  // Undo/Redo stacks hold snapshots of rooms data (array of JSON serializable objects)
-  let undoStack = [];
-  let redoStack = [];
+function addRoom() {
+  saveState();
+  rooms.push({
+    x: 100, y: 100, w: 150, h: 100,
+    text: "New Room",
+    color: "#aaf",
+    fontSize: 16
+  });
+  draw();
+}
 
-  // Zoom scale and canvas size for zooming by expanding canvas container
-  let scale = 1;
-  let baseCanvasWidth = 2000;
-  let baseCanvasHeight = 1400;
+function saveState() {
+  history.push(JSON.stringify(rooms));
+  if (history.length > 100) history.shift();
+  redoStack = [];
+}
 
-  // -- UTILS --
+function undo() {
+  if (history.length === 0) return;
+  redoStack.push(JSON.stringify(rooms));
+  rooms = JSON.parse(history.pop());
+  selected = [];
+  draw();
+}
 
-  function saveState() {
-    const state = rooms.map(r => serializeRoom(r));
-    undoStack.push(state);
-    redoStack = [];
-    updateUndoRedoButtons();
-    saveToLocalStorage();
-  }
+function redo() {
+  if (redoStack.length === 0) return;
+  history.push(JSON.stringify(rooms));
+  rooms = JSON.parse(redoStack.pop());
+  selected = [];
+  draw();
+}
 
-  function restoreState(state) {
-    clearCanvas();
-    state.forEach(data => {
-      const room = createRoomElement(data);
-      canvas.appendChild(room);
-      rooms.push(room);
-    });
-    selectedRooms.clear();
-    updateSelectionUI();
-    saveToLocalStorage();
-  }
+function draw() {
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(zoom, zoom);
+  rooms.forEach((r, i) => {
+    ctx.fillStyle = r.color;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = selected.includes(i) ? "red" : "black";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = "black";
+    ctx.font = `${r.fontSize}px sans-serif`;
+    wrapText(r.text, r.x + 5, r.y + 20, r.w - 10, r.fontSize + 4);
+  });
+}
 
-  function updateUndoRedoButtons() {
-    undoBtn.disabled = undoStack.length <= 1;
-    redoBtn.disabled = redoStack.length === 0;
-  }
-
-  function saveToLocalStorage() {
-    try {
-      const state = rooms.map(r => serializeRoom(r));
-      localStorage.setItem('roomLayout', JSON.stringify(state));
-    } catch {}
-  }
-
-  function loadFromLocalStorage() {
-    try {
-      const data = JSON.parse(localStorage.getItem('roomLayout'));
-      if (data && Array.isArray(data)) {
-        restoreState(data);
-        undoStack = [];
-        redoStack = [];
-        saveState();
-      }
-    } catch {}
-  }
-
-  // -- ROOM SERIALIZATION --
-
-  function serializeRoom(room) {
-    return {
-      left: room.style.left,
-      top: room.style.top,
-      width: room.style.width,
-      height: room.style.height,
-      text: room.innerText,
-      fontFamily: room.style.fontFamily,
-      fontSize: room.style.fontSize,
-      fontWeight: room.style.fontWeight,
-      color: room.style.color,
-      backgroundColor: room.style.backgroundColor,
-      zIndex: room.style.zIndex || '0',
-    };
-  }
-
-  // -- ROOM CREATION --
-
-  function createRoomElement(data = {}) {
-    const room = document.createElement('div');
-    room.classList.add('room');
-    room.contentEditable = true;
-    room.style.left = data.left || '50px';
-    room.style.top = data.top || '50px';
-    room.style.width = data.width || '120px';
-    room.style.height = data.height || '80px';
-    room.style.fontFamily = data.fontFamily || 'Arial, sans-serif';
-    room.style.fontSize = data.fontSize || '14px';
-    room.style.fontWeight = data.fontWeight || 'normal';
-    room.style.color = data.color || 'black';
-    room.style.backgroundColor = data.backgroundColor || '#80bfff';
-    room.style.zIndex = data.zIndex || '0';
-    room.innerText = data.text || 'Room';
-
-    makeDraggableAndResizable(room);
-    attachRoomEvents(room);
-
-    return room;
-  }
-
-  // -- SELECTION --
-
-  function selectRoom(room, additive = false) {
-    if (!additive) {
-      selectedRooms.forEach(r => r.classList.remove('selected'));
-      selectedRooms.clear();
-    }
-    selectedRooms.add(room);
-    room.classList.add('selected');
-    updateSidebar();
-  }
-
-  function deselectRoom(room) {
-    selectedRooms.delete(room);
-    room.classList.remove('selected');
-    updateSidebar();
-  }
-
-  function toggleRoomSelection(room, additive = false) {
-    if (selectedRooms.has(room)) {
-      deselectRoom(room);
+function wrapText(text, x, y, maxWidth, lineHeight) {
+  const words = text.split(" ");
+  let line = "";
+  for (let i = 0; i < words.length; i++) {
+    const test = line + words[i] + " ";
+    if (ctx.measureText(test).width > maxWidth) {
+      ctx.fillText(line, x, y);
+      line = words[i] + " ";
+      y += lineHeight;
     } else {
-      selectRoom(room, additive);
+      line = test;
     }
   }
+  ctx.fillText(line, x, y);
+}
 
-  function clearSelection() {
-    selectedRooms.forEach(r => r.classList.remove('selected'));
-    selectedRooms.clear();
-    updateSidebar();
-  }
+canvas.onmousedown = (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) / zoom;
+  const my = (e.clientY - rect.top) / zoom;
+  startX = mx;
+  startY = my;
 
-  function updateSelectionUI() {
-    rooms.forEach(room => {
-      if (selectedRooms.has(room)) room.classList.add('selected');
-      else room.classList.remove('selected');
-    });
-    updateSidebar();
-  }
-
-  // -- DRAG & RESIZE --
-
-  function makeDraggableAndResizable(room) {
-    let isDragging = false;
-    let dragOffsetX = 0;
-    let dragOffsetY = 0;
-
-    room.addEventListener('mousedown', e => {
-      if (e.target !== room) return;
-
-      if (!e.shiftKey && !selectedRooms.has(room)) {
-        clearSelection();
+  let found = false;
+  rooms.slice().reverse().forEach((r, i) => {
+    const index = rooms.length - 1 - i;
+    if (
+      mx >= r.x && mx <= r.x + r.w &&
+      my >= r.y && my <= r.y + r.h
+    ) {
+      if (!e.shiftKey && !selected.includes(index)) {
+        selected = [index];
+      } else if (e.shiftKey && !selected.includes(index)) {
+        selected.push(index);
       }
-      selectRoom(room, e.shiftKey);
-
-      isDragging = true;
-      dragOffsetX = e.clientX - room.offsetLeft;
-      dragOffsetY = e.clientY - room.offsetTop;
-
-      e.preventDefault();
-    });
-
-    window.addEventListener('mousemove', e => {
-      if (!isDragging) return;
-      const x = e.clientX - dragOffsetX;
-      const y = e.clientY - dragOffsetY;
-
-      const draggedRoom = [...selectedRooms][0];
-      if (!draggedRoom) return;
-
-      const deltaX = x - draggedRoom.offsetLeft;
-      const deltaY = y - draggedRoom.offsetTop;
-
-      selectedRooms.forEach(r => {
-        const newLeft = r.offsetLeft + deltaX;
-        const newTop = r.offsetTop + deltaY;
-        r.style.left = newLeft + 'px';
-        r.style.top = newTop + 'px';
-      });
-    });
-
-    window.addEventListener('mouseup', e => {
-      if (isDragging) {
-        isDragging = false;
-        saveState();
-      }
-    });
-
-    room.addEventListener('input', e => {
-      saveState();
-    });
-
-    room.addEventListener('mousedown', e => {
-      e.stopPropagation();
-    });
-  }
-
-  // -- SIDEBAR --
-
-  function updateSidebar() {
-    if (selectedRooms.size === 0) {
-      sidebar.style.display = 'none';
-      return;
-    }
-    sidebar.style.display = 'block';
-
-    const arr = Array.from(selectedRooms);
-    const first = arr[0];
-
-    function uniformProperty(prop) {
-      const val = first.style[prop];
-      return arr.every(r => r.style[prop] === val) ? val : '';
-    }
-
-    propFontFamily.value = uniformProperty('fontFamily') || 'Arial, sans-serif';
-    propFontSize.value = uniformProperty('fontSize') ? parseInt(uniformProperty('fontSize')) : 14;
-    propFontWeight.value = uniformProperty('fontWeight') || 'normal';
-    propTextColor.value = uniformProperty('color') || '#000000';
-    propBgColor.value = uniformProperty('backgroundColor') || '#80bfff';
-  }
-
-  function applySidebarChanges() {
-    selectedRooms.forEach(room => {
-      room.style.fontFamily = propFontFamily.value;
-      room.style.fontSize = propFontSize.value + 'px';
-      room.style.fontWeight = propFontWeight.value;
-      room.style.color = propTextColor.value;
-      room.style.backgroundColor = propBgColor.value;
-    });
-    saveState();
-  }
-
-  propFontFamily.addEventListener('change', applySidebarChanges);
-  propFontSize.addEventListener('change', applySidebarChanges);
-  propFontWeight.addEventListener('change', applySidebarChanges);
-  propTextColor.addEventListener('input', applySidebarChanges);
-  propBgColor.addEventListener('input', applySidebarChanges);
-
-  // -- LAYERING --
-
-  function bringForward() {
-    selectedRooms.forEach(room => {
-      let z = parseInt(room.style.zIndex || 0);
-      z++;
-      room.style.zIndex = z;
-    });
-    saveState();
-  }
-
-  function sendBackward() {
-    selectedRooms.forEach(room => {
-      let z = parseInt(room.style.zIndex || 0);
-      z = Math.max(0, z - 1);
-      room.style.zIndex = z;
-    });
-    saveState();
-  }
-
-  // -- TRASH --
-
-  function trashSelected() {
-    selectedRooms.forEach(room => {
-      canvas.removeChild(room);
-      rooms = rooms.filter(r => r !== room);
-    });
-    selectedRooms.clear();
-    updateSidebar();
-    saveState();
-  }
-
-  // -- ZOOM --
-
-  function zoomIn() {
-    scale = Math.min(5, scale * 1.2);
-    updateCanvasSize();
-  }
-  function zoomOut() {
-    scale = Math.max(0.2, scale / 1.2);
-    updateCanvasSize();
-  }
-
-  function updateCanvasSize() {
-    canvas.style.width = baseCanvasWidth * scale + 'px';
-    canvas.style.height = baseCanvasHeight * scale + 'px';
-  }
-
-  // -- SAVE / LOAD --
-
-  function saveLayout() {
-    const data = rooms.map(r => serializeRoom(r));
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'room-layout.json';
-    a.click();
-
-    URL.revokeObjectURL(url);
-  }
-
-  function loadLayout() {
-    loadFromLocalStorage();
-  }
-
-  // -- EXPORT PNG --
-
-  exportBtn.addEventListener('click', () => {
-    // Use html2canvas to export the #canvas div as PNG
-    html2canvas(canvas, {scale: 2}).then(canvasImg => {
-      const link = document.createElement('a');
-      link.download = 'room-layout.png';
-      link.href = canvasImg.toDataURL('image/png');
-      link.click();
-    });
-  });
-
-  // -- ADD ROOM --
-
-  addRoomBtn.addEventListener('click', () => {
-    const room = createRoomElement();
-    canvas.appendChild(room);
-    rooms.push(room);
-    clearSelection();
-    selectRoom(room);
-    saveState();
-  });
-
-  // -- TRASH --
-
-  trashBtn.addEventListener('click', () => {
-    if (selectedRooms.size === 0) return alert('No rooms selected');
-    if (!confirm(`Delete ${selectedRooms.size} selected room(s)?`)) return;
-    trashSelected();
-  });
-
-  // -- LAYERING --
-
-  bringForwardBtn.addEventListener('click', () => {
-    bringForward();
-  });
-
-  sendBackwardBtn.addEventListener('click', () => {
-    sendBackward();
-  });
-
-  // -- UNDO / REDO --
-
-  undoBtn.addEventListener('click', () => {
-    if (undoStack.length <= 1) return;
-    const current = undoStack.pop();
-    redoStack.push(current);
-    const prev = undoStack[undoStack.length - 1];
-    restoreState(prev);
-    updateUndoRedoButtons();
-  });
-
-  redoBtn.addEventListener('click', () => {
-    if (redoStack.length === 0) return;
-    const next = redoStack.pop();
-    undoStack.push(next);
-    restoreState(next);
-    updateUndoRedoButtons();
-  });
-
-  // -- ZOOM --
-
-  zoomInBtn.addEventListener('click', () => zoomIn());
-  zoomOutBtn.addEventListener('click', () => zoomOut());
-
-  // -- SELECTION VIA CANVAS CLICK (deselect) --
-
-  canvas.addEventListener('mousedown', e => {
-    if (e.target === canvas) {
-      clearSelection();
+      dragging = true;
+      found = true;
+      draw();
     }
   });
 
-  // -- CLEAR CANVAS --
-
-  function clearCanvas() {
-    rooms.forEach(r => canvas.removeChild(r));
-    rooms = [];
+  if (!found && !e.shiftKey) {
+    selected = [];
+    draw();
   }
+};
 
-  // -- INITIAL LOAD --
+canvas.onmousemove = (e) => {
+  if (!dragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) / zoom;
+  const my = (e.clientY - rect.top) / zoom;
+  const dx = mx - startX;
+  const dy = my - startY;
+  selected.forEach(i => {
+    rooms[i].x += dx;
+    rooms[i].y += dy;
+  });
+  startX = mx;
+  startY = my;
+  draw();
+};
 
-  loadFromLocalStorage();
-  updateCanvasSize();
+canvas.onmouseup = () => {
+  if (dragging) saveState();
+  dragging = false;
+};
 
-  // Save initial empty state so undo works properly
-  if (undoStack.length === 0) saveState();
+function openSettings() {
+  if (selected.length === 0) return;
+  const r = rooms[selected[0]];
+  colorInput.value = r.color;
+  fontSizeInput.value = r.fontSize;
+  roomTextInput.value = r.text;
+  settingsModal.style.display = "block";
+}
 
-})();
+function closeSettings() {
+  settingsModal.style.display = "none";
+}
+
+function applySettings() {
+  saveState();
+  selected.forEach(i => {
+    rooms[i].color = colorInput.value;
+    rooms[i].fontSize = parseInt(fontSizeInput.value);
+    rooms[i].text = roomTextInput.value;
+  });
+  closeSettings();
+  draw();
+}
+
+function trashSelected() {
+  if (selected.length === 0) return;
+  saveState();
+  rooms = rooms.filter((_, i) => !selected.includes(i));
+  selected = [];
+  draw();
+}
+
+function bringForward() {
+  selected.forEach(i => {
+    if (i < rooms.length - 1) {
+      [rooms[i], rooms[i + 1]] = [rooms[i + 1], rooms[i]];
+    }
+  });
+  draw();
+}
+
+function sendBackward() {
+  selected.forEach(i => {
+    if (i > 0) {
+      [rooms[i], rooms[i - 1]] = [rooms[i - 1], rooms[i]];
+    }
+  });
+  draw();
+}
+
+function zoomIn() {
+  zoom = Math.min(zoom + 0.1, 3);
+  draw();
+}
+function zoomOut() {
+  zoom = Math.max(zoom - 0.1, 0.3);
+  draw();
+}
+
+function saveLayout() {
+  localStorage.setItem("roomLayout", JSON.stringify(rooms));
+  alert("Layout saved to local storage.");
+}
+function loadLayout() {
+  const data = localStorage.getItem("roomLayout");
+  if (data) {
+    rooms = JSON.parse(data);
+    selected = [];
+    draw();
+  } else {
+    alert("No layout found in local storage.");
+  }
+}
+
+function downloadJSON() {
+  const blob = new Blob([JSON.stringify(rooms)], {type: "application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "room_layout.json";
+  a.click();
+}
+
+function loadFromFile(event) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    rooms = JSON.parse(e.target.result);
+    selected = [];
+    draw();
+  };
+  reader.readAsText(event.target.files[0]);
+}
+
+document.querySelector("button[onclick='loadLayout()']").addEventListener("contextmenu", e => {
+  e.preventDefault();
+  document.getElementById("fileInput").click();
+});
 </script>
 
 </body>
