@@ -88,6 +88,9 @@ let selected = [];
 let dragging = false;
 let resizing = false;
 let resizeIndex = -1;
+let dragIndex = -1;
+let offsetX = 0;
+let offsetY = 0;
 let startX, startY;
 let zoom = 1;
 let lastColor = "#aaf";
@@ -331,6 +334,47 @@ canvas.onmouseup = () => {
   dragging = false;
   resizing = false;
   resizeIndex = -1;
+};
+
+canvas.onmousedown = (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+
+  for (let i = rooms.length - 1; i >= 0; i--) {
+    const room = rooms[i];
+
+    // Check for resize handle (bottom-right corner)
+    const handleSize = 10;
+    if (
+      mouseX >= room.x + room.width - handleSize &&
+      mouseX <= room.x + room.width &&
+      mouseY >= room.y + room.height - handleSize &&
+      mouseY <= room.y + room.height
+    ) {
+      resizing = true;
+      resizeIndex = i;
+      offsetX = mouseX;
+      offsetY = mouseY;
+      initialWidth = room.width;
+      initialHeight = room.height;
+      return;
+    }
+
+    // Check for drag (click inside box)
+    if (
+      mouseX >= room.x &&
+      mouseX <= room.x + room.width &&
+      mouseY >= room.y &&
+      mouseY <= room.y + room.height
+    ) {
+      dragging = true;
+      dragIndex = i;
+      offsetX = mouseX - room.x;
+      offsetY = mouseY - room.y;
+      return;
+    }
+  }
 };
 
 // --------- Settings Modal ----------
