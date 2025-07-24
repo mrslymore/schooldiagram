@@ -233,14 +233,42 @@
     }
 
     function loadLayout() {
-      const data = localStorage.getItem('roomLayout');
-      if (data) {
-        rooms = JSON.parse(data);
-        selectedRooms = [];
-        saveHistory();
-        draw();
+  const fileInput = document.getElementById('fileInput');
+  fileInput.click();
+
+  fileInput.onchange = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (Array.isArray(data)) {
+          clearLayout();
+          data.forEach(room => {
+            const div = document.createElement('div');
+            div.className = 'room';
+            div.textContent = room.text;
+            div.style.left = room.left;
+            div.style.top = room.top;
+            div.style.width = room.width;
+            div.style.height = room.height;
+            div.style.backgroundColor = room.color || '#add8e6';
+            div.contentEditable = true;
+            makeDraggableResizable(div);
+            div.addEventListener('click', (e) => toggleSelection(div, e));
+            document.getElementById('classroom').appendChild(div);
+          });
+        }
+      } catch (err) {
+        alert('Failed to load layout: Invalid file');
       }
-    }
+    };
+    reader.readAsText(file);
+  };
+}
+
 
     function exportPNG() {
       const tempScale = 2;
