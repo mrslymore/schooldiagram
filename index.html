@@ -1,81 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Interactive Floor Plan</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Room Layout Editor</title>
   <style>
     body {
       font-family: sans-serif;
       margin: 0;
-      padding: 0;
-    }
-
-    #toolbar {
-      padding: 10px;
-      background: #eee;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    #floorplan {
-      width: 100%;
-      height: 90vh;
-      border: 1px solid #ccc;
-      position: relative;
       overflow: hidden;
     }
-
+    #toolbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      background: #eee;
+      padding: 8px;
+      z-index: 100;
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      border-bottom: 1px solid #ccc;
+    }
+    #canvas {
+      position: absolute;
+      top: 50px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #f9f9f9;
+      overflow: hidden;
+      transform-origin: top left;
+    }
     .room {
       position: absolute;
-      border: 2px solid #333;
-      background-color: #f9f9f9;
-      padding: 5px;
-      resize: both;
-      overflow: auto;
+      border: 2px solid black;
+      padding: 4px;
+      background-color: #fff;
       cursor: move;
       user-select: none;
-      min-width: 60px;
-      min-height: 40px;
+      resize: none;
+      overflow: hidden;
     }
-
-    .room.selected {
-      border: 2px dashed red;
-    }
-
     .resizer {
-      position: absolute;
       width: 12px;
       height: 12px;
-      background: #555;
+      background: #000;
+      position: absolute;
       right: 0;
       bottom: 0;
       cursor: se-resize;
     }
-
-    /* Modal Styling */
-    #roomSettingsModal {
+    .selected {
+      outline: 3px dashed red;
+    }
+    #roomSettings {
       position: fixed;
-      top: 50%;
+      top: 100px;
       left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
-      padding: 20px;
-      border: 2px solid #333;
+      transform: translateX(-50%);
+      background: #fff;
+      border: 1px solid #aaa;
+      padding: 15px;
+      z-index: 200;
       display: none;
-      z-index: 10;
     }
-
-    #overlay {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: rgba(0,0,0,0.5);
-      display: none;
-      z-index: 5;
-    }
-
     textarea {
       width: 100%;
       height: 60px;
@@ -83,202 +73,232 @@
   </style>
 </head>
 <body>
+  <div id="toolbar">
+    <button onclick="addRoom()">Add Room</button>
+    <button onclick="openRoomSettings()">Edit</button>
+    <button onclick="deleteSelected()">Delete</button>
+    <button onclick="undo()">Undo</button>
+    <button onclick="redo()">Redo</button>
+    <button onclick="exportLayout()">Export PNG</button>
+    <button onclick="loadLayout()">Load Layout</button>
+    <button onclick="zoomIn()">Zoom In</button>
+    <button onclick="zoomOut()">Zoom Out</button>
+  </div>
 
-<div id="toolbar">
-  <button onclick="createRoom()">+ Add Room</button>
-  <button onclick="editSelectedRoom()">✏️ Edit</button>
-  <button onclick="deleteSelectedRooms()">🗑️ Delete</button>
-</div>
+  <div id="canvas"></div>
 
-<div id="floorplan"></div>
+  <div id="roomSettings">
+    <label>Text:<br><textarea id="roomText"></textarea></label><br>
+    <label>Color: <input type="color" id="roomColor"></label><br>
+    <label>Font Size: <input type="number" id="roomFontSize" value="14"></label><br><br>
+    <button onclick="applyRoomSettings()">Apply</button>
+    <button onclick="closeRoomSettings()">Cancel</button>
+  </div>
 
-<!-- Modal for Room Settings -->
-<div id="overlay"></div>
-<div id="roomSettingsModal">
-  <label>Room Name:</label><br>
-  <textarea id="roomText"></textarea><br><br>
+  <script>
+    const canvas = document.getElementById('canvas');
+    let selectedRooms = new Set();
+    let zoomLevel = 1;
+    let history = [];
+    let historyIndex = -1;
 
-  <label>Background Color:</label><br>
-  <input type="color" id="roomColor"><br><br>
-
-  <label>Font Size:</label><br>
-  <input type="number" id="roomFontSize" min="8" max="48" value="16"><br><br>
-
-  <button onclick="applyRoomSettings()">Apply</button>
-  <button onclick="closeRoomSettings()">Cancel</button>
-</div>
-
-<script>
-let selectedRooms = new Set();
-let currentRoom = null;
-
-function createRoom() {
-  const room = document.createElement("div");
-  room.classList.add("room");
-  room.style.left = "100px";
-  room.style.top = "100px";
-  room.style.width = "100px";
-  room.style.height = "60px";
-  room.style.fontSize = "16px";
-  room.textContent = "New Room";
-
-  // Add resizer
-  const resizer = document.createElement("div");
-  resizer.classList.add("resizer");
-  room.appendChild(resizer);
-
-  enableRoomInteraction(room);
-  document.getElementById("floorplan").appendChild(room);
-}
-
-function enableRoomInteraction(room) {
-  room.addEventListener("mousedown", startDrag);
-  room.addEventListener("click", toggleRoomSelection);
-
-  const resizer = room.querySelector(".resizer");
-  resizer.addEventListener("mousedown", startResize);
-}
-
-function toggleRoomSelection(e) {
-  if (e.shiftKey) {
-    this.classList.toggle("selected");
-    if (selectedRooms.has(this)) {
-      selectedRooms.delete(this);
-    } else {
-      selectedRooms.add(this);
+    function saveHistory() {
+      history = history.slice(0, historyIndex + 1);
+      history.push(canvas.innerHTML);
+      historyIndex++;
     }
-  } else {
-    selectedRooms.forEach(r => r.classList.remove("selected"));
-    selectedRooms.clear();
-    this.classList.add("selected");
-    selectedRooms.add(this);
-  }
-  e.stopPropagation();
-}
 
-document.getElementById("floorplan").addEventListener("click", () => {
-  selectedRooms.forEach(r => r.classList.remove("selected"));
-  selectedRooms.clear();
-});
+    function undo() {
+      if (historyIndex > 0) {
+        historyIndex--;
+        canvas.innerHTML = history[historyIndex];
+        rebindRoomEvents();
+      }
+    }
 
-function startDrag(e) {
-  if (!selectedRooms.has(this)) return;
-  e.preventDefault();
-  const startX = e.clientX;
-  const startY = e.clientY;
+    function redo() {
+      if (historyIndex < history.length - 1) {
+        historyIndex++;
+        canvas.innerHTML = history[historyIndex];
+        rebindRoomEvents();
+      }
+    }
 
-  const positions = Array.from(selectedRooms).map(room => {
-    return {
-      el: room,
-      startLeft: parseInt(room.style.left),
-      startTop: parseInt(room.style.top)
-    };
-  });
+    function addRoom() {
+      const room = document.createElement('div');
+      room.className = 'room';
+      room.contentEditable = false;
+      room.style.left = '100px';
+      room.style.top = '100px';
+      room.style.width = '100px';
+      room.style.height = '80px';
+      room.style.backgroundColor = '#ffffff';
+      room.style.fontSize = '14px';
+      room.innerText = 'Room';
+      const resizer = document.createElement('div');
+      resizer.className = 'resizer';
+      room.appendChild(resizer);
+      canvas.appendChild(room);
+      makeRoomInteractive(room);
+      saveHistory();
+    }
 
-  function drag(e) {
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    positions.forEach(({el, startLeft, startTop}) => {
-      el.style.left = (startLeft + dx) + "px";
-      el.style.top = (startTop + dy) + "px";
-    });
-  }
+    function makeRoomInteractive(room) {
+      let offsetX, offsetY;
+      let resizing = false;
+      let isDragging = false;
 
-  function stopDrag() {
-    document.removeEventListener("mousemove", drag);
-    document.removeEventListener("mouseup", stopDrag);
-  }
+      const resizer = room.querySelector('.resizer');
 
-  document.addEventListener("mousemove", drag);
-  document.addEventListener("mouseup", stopDrag);
-}
+      room.addEventListener('mousedown', (e) => {
+        if (e.target === resizer) {
+          resizing = true;
+        } else {
+          isDragging = true;
+          offsetX = e.offsetX;
+          offsetY = e.offsetY;
 
-function startResize(e) {
-  e.stopPropagation();
-  const room = this.parentElement;
-  if (!selectedRooms.has(room)) return;
+          if (!e.shiftKey) selectedRooms.clear();
+          selectedRooms.add(room);
+          updateSelectionStyles();
+        }
+        e.stopPropagation();
+      });
 
-  e.preventDefault();
-  const startX = e.clientX;
-  const startY = e.clientY;
+      document.addEventListener('mousemove', (e) => {
+        if (resizing) {
+          const rect = room.getBoundingClientRect();
+          room.style.width = (e.clientX - rect.left) + 'px';
+          room.style.height = (e.clientY - rect.top) + 'px';
+        } else if (isDragging) {
+          const dx = e.movementX / zoomLevel;
+          const dy = e.movementY / zoomLevel;
+          selectedRooms.forEach(r => {
+            r.style.left = (parseFloat(r.style.left) + dx) + 'px';
+            r.style.top = (parseFloat(r.style.top) + dy) + 'px';
+          });
+        }
+      });
 
-  const dimensions = Array.from(selectedRooms).map(room => {
-    return {
-      el: room,
-      startWidth: room.offsetWidth,
-      startHeight: room.offsetHeight
-    };
-  });
+      document.addEventListener('mouseup', () => {
+        if (resizing || isDragging) saveHistory();
+        resizing = false;
+        isDragging = false;
+      });
 
-  function resize(e) {
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    dimensions.forEach(({el, startWidth, startHeight}) => {
-      el.style.width = (startWidth + dx) + "px";
-      el.style.height = (startHeight + dy) + "px";
-    });
-  }
+      room.addEventListener('dblclick', (e) => {
+        if (!e.shiftKey) {
+          selectedRooms.clear();
+        }
+        selectedRooms.add(room);
+        updateSelectionStyles();
+        openRoomSettings();
+      });
+    }
 
-  function stopResize() {
-    document.removeEventListener("mousemove", resize);
-    document.removeEventListener("mouseup", stopResize);
-  }
+    function rebindRoomEvents() {
+      document.querySelectorAll('.room').forEach(makeRoomInteractive);
+    }
 
-  document.addEventListener("mousemove", resize);
-  document.addEventListener("mouseup", stopResize);
-}
+    function updateSelectionStyles() {
+      document.querySelectorAll('.room').forEach(r => {
+        r.classList.remove('selected');
+      });
+      selectedRooms.forEach(r => r.classList.add('selected'));
+    }
 
-function editSelectedRoom() {
-  if (selectedRooms.size === 0) return;
+    function openRoomSettings() {
+      if (selectedRooms.size === 0) return;
+      const [firstRoom] = selectedRooms;
+      document.getElementById('roomText').value = firstRoom.childNodes[0]?.textContent || '';
+      document.getElementById('roomColor').value = rgbToHex(firstRoom.style.backgroundColor);
+      document.getElementById('roomFontSize').value = parseInt(firstRoom.style.fontSize);
+      document.getElementById('roomSettings').style.display = 'block';
+    }
 
-  currentRoom = Array.from(selectedRooms)[0]; // Use first for form data
+    function applyRoomSettings() {
+      const text = document.getElementById('roomText').value;
+      const color = document.getElementById('roomColor').value;
+      const fontSize = document.getElementById('roomFontSize').value;
 
-  document.getElementById("roomText").value = currentRoom.childNodes[0]?.textContent || "";
-  document.getElementById("roomColor").value = rgbToHex(currentRoom.style.backgroundColor);
-  document.getElementById("roomFontSize").value = parseInt(currentRoom.style.fontSize) || 16;
+      selectedRooms.forEach(room => {
+        const resizer = room.querySelector('.resizer');
+        room.innerHTML = '';
+        const lines = text.split('\n');
+        lines.forEach((line, i) => {
+          const div = document.createElement('div');
+          div.textContent = line;
+          room.appendChild(div);
+        });
+        room.appendChild(resizer);
+        room.style.backgroundColor = color;
+        room.style.fontSize = fontSize + 'px';
+      });
 
-  document.getElementById("overlay").style.display = "block";
-  document.getElementById("roomSettingsModal").style.display = "block";
-}
+      closeRoomSettings();
+      saveHistory();
+    }
 
-function applyRoomSettings() {
-  const text = document.getElementById("roomText").value;
-  const color = document.getElementById("roomColor").value;
-  const fontSize = document.getElementById("roomFontSize").value + "px";
+    function closeRoomSettings() {
+      document.getElementById('roomSettings').style.display = 'none';
+    }
 
-  selectedRooms.forEach(room => {
-    const resizer = room.querySelector(".resizer");
-    room.innerHTML = "";
-    const textNode = document.createElement("div");
-    textNode.textContent = text;
-    textNode.style.whiteSpace = "pre-wrap";
-    room.appendChild(textNode);
-    room.appendChild(resizer);
+    function deleteSelected() {
+      selectedRooms.forEach(r => r.remove());
+      selectedRooms.clear();
+      updateSelectionStyles();
+      saveHistory();
+    }
 
-    room.style.backgroundColor = color;
-    room.style.fontSize = fontSize;
-  });
+    function rgbToHex(rgb) {
+      const result = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(rgb);
+      return result
+        ? "#" +
+            [1, 2, 3]
+              .map(n => parseInt(result[n]).toString(16).padStart(2, "0"))
+              .join("")
+        : rgb;
+    }
 
-  closeRoomSettings();
-}
+    function exportLayout() {
+      html2canvas(canvas).then(canvasOut => {
+        const a = document.createElement('a');
+        a.href = canvasOut.toDataURL();
+        a.download = 'layout.png';
+        a.click();
+      });
+    }
 
-function closeRoomSettings() {
-  document.getElementById("overlay").style.display = "none";
-  document.getElementById("roomSettingsModal").style.display = "none";
-  currentRoom = null;
-}
+    function loadLayout() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          canvas.innerHTML = e.target.result;
+          rebindRoomEvents();
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    }
 
-function deleteSelectedRooms() {
-  selectedRooms.forEach(room => room.remove());
-  selectedRooms.clear();
-}
+    function zoomIn() {
+      zoomLevel *= 1.1;
+      canvas.style.transform = `scale(${zoomLevel})`;
+    }
 
-function rgbToHex(rgb) {
-  if (!rgb || rgb.indexOf("rgb") === -1) return "#f9f9f9";
-  const result = rgb.match(/\d+/g).map(Number);
-  return "#" + result.map(x => x.toString(16).padStart(2, "0")).join("");
-}
-</script>
+    function zoomOut() {
+      zoomLevel /= 1.1;
+      canvas.style.transform = `scale(${zoomLevel})`;
+    }
 
+    // Load html2canvas for export
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    document.body.appendChild(script);
+  </script>
 </body>
 </html>
