@@ -96,8 +96,6 @@ let zoom = 1;
 let lastColor = "#aaf";
 let initialWidth = 0;
 let initialHeight = 0;
-let offsetX = 0;
-let offsetY = 0;
 let panStartX = 0;
 let panStartY = 0;
 let panning = false;
@@ -184,30 +182,30 @@ function redo() {
 
 function draw() {
   ctx.save();
-  ctx.setTransform(zoom, 0, 0, zoom, offsetX, offsetY); // zoom & pan
+  ctx.setTransform(zoom, 0, 0, zoom, offsetX, offsetY); // apply zoom and pan
   ctx.clearRect(-offsetX / zoom, -offsetY / zoom, canvas.width / zoom, canvas.height / zoom);
-  ctx.scale(zoom, zoom);
+
   rooms.forEach((r, i) => {
-    ctx.fillStyle = r.color;
+    // Fill Room
+    ctx.fillStyle = r.color || 'lightgray';
     ctx.fillRect(r.x, r.y, r.w, r.h);
+
+    // Outline
     ctx.strokeStyle = selected.includes(i) ? "red" : "black";
     ctx.lineWidth = 2;
     ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+    // Text
     ctx.fillStyle = "black";
     ctx.font = `${r.fontSize}px sans-serif`;
     wrapText(r.text, r.x + 5, r.y + 20, r.w - 10, r.fontSize + 4);
-    // Draw resize handle bottom right
+
+    // Resize Handle
     ctx.fillStyle = selected.includes(i) ? "red" : "gray";
     ctx.fillRect(r.x + r.w - 10, r.y + r.h - 10, 10, 10);
-   for (let r of rooms) {
-    ctx.fillStyle = r.color || 'lightgray';
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.strokeStyle = 'black';
-    ctx.strokeRect(r.x, r.y, r.w, r.h);
-  }
+  });
 
   ctx.restore();
-  });
 }
 
 function wrapText(text, x, y, maxWidth, lineHeight) {
@@ -233,6 +231,13 @@ canvas.onmousedown = (e) => {
 const mx = (e.clientX - rect.left - offsetX) / zoom;
 const my = (e.clientY - rect.top - offsetY) / zoom;
 
+  if (e.button === 2 || e.shiftKey) { // Right-click or Shift+Drag to pan
+    panning = true;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    return; // skip further room checks, pan takes priority
+  }
+
   for (let i = rooms.length - 1; i >= 0; i--) {
     const r = rooms[i];
 
@@ -249,11 +254,6 @@ const my = (e.clientY - rect.top - offsetY) / zoom;
       startY = my;
       return;
     }
-     if (e.button === 2 || e.shiftKey) { // Right-click or Shift+Drag to pan
-        panning = true;
-        panStartX = e.clientX;
-        panStartY = e.clientY;
-  }
     // Check for move
     if (
       mx >= r.x && mx <= r.x + r.w &&
@@ -340,13 +340,11 @@ canvas.onmouseup = () => {
   if (dragging || resizing) {
     saveState();
   }
-    panning = false;
-};
-  canvas.oncontextmenu = (e) => e.preventDefault();
   dragging = false;
   resizing = false;
   resizeIndex = -1;
   dragIndex = -1;
+  panning = false;
 };
 
 // --------- Settings Modal ----------
