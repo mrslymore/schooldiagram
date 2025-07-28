@@ -220,8 +220,7 @@ canvas.onmousedown = (e) => {
 
   for (let i = rooms.length - 1; i >= 0; i--) {
     const r = rooms[i];
-
-    // Resize handle detection
+    // Check for resize handle
     if (
       mx >= r.x + r.w - 10 && mx <= r.x + r.w &&
       my >= r.y + r.h - 10 && my <= r.y + r.h
@@ -235,7 +234,7 @@ canvas.onmousedown = (e) => {
       return;
     }
 
-    // Drag room
+    // Check if clicked inside room
     if (
       mx >= r.x && mx <= r.x + r.w &&
       my >= r.y && my <= r.y + r.h
@@ -246,13 +245,14 @@ canvas.onmousedown = (e) => {
         selected.push(i);
       }
       dragging = true;
+      dragIndex = i;
       startX = mx;
       startY = my;
       return;
     }
   }
 
-  // Clicked empty space: deselect
+  // Clicked empty area
   if (!e.shiftKey) {
     selected = [];
     draw();
@@ -266,8 +266,9 @@ canvas.onmousemove = (e) => {
 
   let hoveringResize = false;
 
-  // Update cursor
-  for (let r of rooms) {
+  // Hover state for cursor
+  for (let i = rooms.length - 1; i >= 0; i--) {
+    const r = rooms[i];
     if (
       mx >= r.x + r.w - 10 && mx <= r.x + r.w &&
       my >= r.y + r.h - 10 && my <= r.y + r.h
@@ -276,6 +277,26 @@ canvas.onmousemove = (e) => {
       break;
     }
   }
+
+  if (resizing) {
+    const dx = mx - startX;
+    const dy = my - startY;
+    const r = rooms[resizeIndex];
+    r.w = Math.max(30, initialWidth + dx);
+    r.h = Math.max(30, initialHeight + dy);
+    draw();
+  } else if (dragging) {
+    const dx = mx - startX;
+    const dy = my - startY;
+    selected.forEach(i => {
+      rooms[i].x += dx;
+      rooms[i].y += dy;
+    });
+    startX = mx;
+    startY = my;
+    draw();
+  }
+
   canvas.style.cursor = resizing
     ? 'nwse-resize'
     : dragging
@@ -283,27 +304,6 @@ canvas.onmousemove = (e) => {
     : hoveringResize
     ? 'nwse-resize'
     : 'default';
-
-  // Actual drag or resize
-  if (!dragging && !resizing) return;
-
-  const dx = mx - startX;
-  const dy = my - startY;
-
-  if (resizing && resizeIndex !== -1) {
-    const r = rooms[resizeIndex];
-    r.w = Math.max(30, initialWidth + dx);
-    r.h = Math.max(30, initialHeight + dy);
-  } else if (dragging) {
-    selected.forEach(i => {
-      rooms[i].x += dx;
-      rooms[i].y += dy;
-    });
-  }
-
-  startX = mx;
-  startY = my;
-  draw();
 };
 
 canvas.onmouseup = () => {
@@ -313,7 +313,9 @@ canvas.onmouseup = () => {
   dragging = false;
   resizing = false;
   resizeIndex = -1;
+  dragIndex = -1;
 };
+
 
 
   // Check if clicking inside any room
@@ -341,43 +343,6 @@ canvas.onmouseup = () => {
     draw();
   }
 };
-
-canvas.style.cursor = hoveringResize ? 'nwse-resize' : 'default';
-
-    r.w = Math.max(30, initialWidth + deltaX);
-    r.h = Math.max(30, initialHeight + deltaY);
-    draw();
-  } else if (dragging) {
-    selected.forEach(i => {
-      rooms[i].x += dx;
-      rooms[i].y += dy;
-    });
-  }
-
-  startX = mx;
-  startY = my;
-  draw();
-};
-
-
-
-    // Dragging
-    if (
-      mx >= r.x && mx <= r.x + r.w &&
-      my >= r.y && my <= r.y + r.h
-    ) {
-      if (!e.shiftKey && !selected.includes(i)) {
-        selected = [i];
-      } else if (e.shiftKey && !selected.includes(i)) {
-        selected.push(i);
-      }
-      dragging = true;
-      startX = mx;
-      startY = my;
-      draw();
-      return;
-    }
-  }
 
   // Clicked outside any room
   if (!e.shiftKey) {
