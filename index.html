@@ -96,6 +96,12 @@ let zoom = 1;
 let lastColor = "#aaf";
 let initialWidth = 0;
 let initialHeight = 0;
+let offsetX = 0;
+let offsetY = 0;
+let panStartX = 0;
+let panStartY = 0;
+let panning = false;
+
 
 
 let settingsModal = document.getElementById("settingsModal");
@@ -177,8 +183,9 @@ function redo() {
 }
 
 function draw() {
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.setTransform(zoom, 0, 0, zoom, offsetX, offsetY); // zoom & pan
+  ctx.clearRect(-offsetX / zoom, -offsetY / zoom, canvas.width / zoom, canvas.height / zoom);
   ctx.scale(zoom, zoom);
   rooms.forEach((r, i) => {
     ctx.fillStyle = r.color;
@@ -192,6 +199,14 @@ function draw() {
     // Draw resize handle bottom right
     ctx.fillStyle = selected.includes(i) ? "red" : "gray";
     ctx.fillRect(r.x + r.w - 10, r.y + r.h - 10, 10, 10);
+   for (let r of rooms) {
+    ctx.fillStyle = r.color || 'lightgray';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = 'black';
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+  }
+
+  ctx.restore();
   });
 }
 
@@ -215,8 +230,8 @@ function wrapText(text, x, y, maxWidth, lineHeight) {
 
 canvas.onmousedown = (e) => {
   const rect = canvas.getBoundingClientRect();
-  const mx = (e.clientX - rect.left) / zoom;
-  const my = (e.clientY - rect.top) / zoom;
+const mx = (e.clientX - rect.left - offsetX) / zoom;
+const my = (e.clientY - rect.top - offsetY) / zoom;
 
   for (let i = rooms.length - 1; i >= 0; i--) {
     const r = rooms[i];
@@ -234,7 +249,11 @@ canvas.onmousedown = (e) => {
       startY = my;
       return;
     }
-
+     if (e.button === 2 || e.shiftKey) { // Right-click or Shift+Drag to pan
+        panning = true;
+        panStartX = e.clientX;
+        panStartY = e.clientY;
+  }
     // Check for move
     if (
       mx >= r.x && mx <= r.x + r.w &&
@@ -262,12 +281,21 @@ canvas.onmousedown = (e) => {
 
 canvas.onmousemove = (e) => {
   const rect = canvas.getBoundingClientRect();
-  const mx = (e.clientX - rect.left) / zoom;
-  const my = (e.clientY - rect.top) / zoom;
+const mx = (e.clientX - rect.left - offsetX) / zoom;
+const my = (e.clientY - rect.top - offsetY) / zoom;
 
   let cursor = "default";
 
-  if (resizing && resizeIndex !== -1) {
+    if (panning) {
+    const dx = e.clientX - panStartX;
+    const dy = e.clientY - panStartY;
+    offsetX += dx;
+    offsetY += dy;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    draw();
+    return;
+  } if (resizing && resizeIndex !== -1) {
     const dx = mx - startX;
     const dy = my - startY;
     const r = rooms[resizeIndex];
@@ -312,6 +340,9 @@ canvas.onmouseup = () => {
   if (dragging || resizing) {
     saveState();
   }
+    panning = false;
+};
+  canvas.oncontextmenu = (e) => e.preventDefault();
   dragging = false;
   resizing = false;
   resizeIndex = -1;
@@ -384,11 +415,26 @@ function trashSelected() {
 // -------- Zoom -----------
 
 function zoomIn() {
+  const oldZoom = zoom;
   zoom = Math.min(zoom + 0.1, 3);
+  const factor = zoom / oldZoom;
+
+  // Adjust offset to zoom around center of screen
+  offsetX = canvas.width / 2 - (canvas.width / 2 - offsetX) * factor;
+  offsetY = canvas.height / 2 - (canvas.height / 2 - offsetY) * factor;
+
   draw();
 }
+
 function zoomOut() {
+  const oldZoom = zoom;
   zoom = Math.max(zoom - 0.1, 0.3);
+  const factor = zoom / oldZoom;
+
+  // Adjust offset to zoom around center of screen
+  offsetX = canvas.width / 2 - (canvas.width / 2 - offsetX) * factor;
+  offsetY = canvas.height / 2 - (canvas.height / 2 - offsetY) * factor;
+
   draw();
 }
 
