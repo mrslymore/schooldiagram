@@ -489,8 +489,11 @@ function loadFromFile(event) {
 // Open file picker when Load button is right-clicked
 document.querySelector("button[onclick='loadLayout()']").addEventListener("contextmenu", e => {
   e.preventDefault();
-  document.getElementById("fileInput").click();
+  const input = document.getElementById("fileInput");
+  input.value = ""; // <-- Add this line to ensure change always fires
+  input.click();
 });
+
 
 </script>
 
