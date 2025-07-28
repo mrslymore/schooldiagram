@@ -125,11 +125,11 @@ window.addEventListener("mousemove", e => {
   if (!dragToolbar) return;
   let x = e.clientX - toolbarOffsetX;
   let y = e.clientY - toolbarOffsetY;
-  // keep inside viewport
   x = Math.min(window.innerWidth - toolbar.offsetWidth, Math.max(0, x));
   y = Math.min(window.innerHeight - toolbar.offsetHeight, Math.max(0, y));
   toolbar.style.left = x + "px";
   toolbar.style.top = y + "px";
+  draw(); // <-- Add this
 });
 
 // ------------ Canvas and Rooms -------------
@@ -213,6 +213,52 @@ function wrapText(text, x, y, maxWidth, lineHeight) {
 
 // ----------- Mouse Interaction -----------
 
+canvas.onmousedown = (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) / zoom;
+  const my = (e.clientY - rect.top) / zoom;
+
+  for (let i = rooms.length - 1; i >= 0; i--) {
+    const r = rooms[i];
+
+    // Resize handle detection
+    if (
+      mx >= r.x + r.w - 10 && mx <= r.x + r.w &&
+      my >= r.y + r.h - 10 && my <= r.y + r.h
+    ) {
+      resizing = true;
+      resizeIndex = i;
+      initialWidth = r.w;
+      initialHeight = r.h;
+      startX = mx;
+      startY = my;
+      return;
+    }
+
+    // Drag room
+    if (
+      mx >= r.x && mx <= r.x + r.w &&
+      my >= r.y && my <= r.y + r.h
+    ) {
+      if (!e.shiftKey && !selected.includes(i)) {
+        selected = [i];
+      } else if (e.shiftKey && !selected.includes(i)) {
+        selected.push(i);
+      }
+      dragging = true;
+      startX = mx;
+      startY = my;
+      return;
+    }
+  }
+
+  // Clicked empty space: deselect
+  if (!e.shiftKey) {
+    selected = [];
+    draw();
+  }
+};
+
 canvas.onmousemove = (e) => {
   const rect = canvas.getBoundingClientRect();
   const mx = (e.clientX - rect.left) / zoom;
@@ -220,7 +266,7 @@ canvas.onmousemove = (e) => {
 
   let hoveringResize = false;
 
-  // Change cursor if hovering over resize handle
+  // Update cursor
   for (let r of rooms) {
     if (
       mx >= r.x + r.w - 10 && mx <= r.x + r.w &&
@@ -230,8 +276,15 @@ canvas.onmousemove = (e) => {
       break;
     }
   }
-  canvas.style.cursor = hoveringResize ? 'nwse-resize' : (dragging ? 'move' : 'default');
+  canvas.style.cursor = resizing
+    ? 'nwse-resize'
+    : dragging
+    ? 'move'
+    : hoveringResize
+    ? 'nwse-resize'
+    : 'default';
 
+  // Actual drag or resize
   if (!dragging && !resizing) return;
 
   const dx = mx - startX;
@@ -241,29 +294,27 @@ canvas.onmousemove = (e) => {
     const r = rooms[resizeIndex];
     r.w = Math.max(30, initialWidth + dx);
     r.h = Math.max(30, initialHeight + dy);
-    draw();
   } else if (dragging) {
     selected.forEach(i => {
       rooms[i].x += dx;
       rooms[i].y += dy;
     });
-    draw();
   }
 
   startX = mx;
   startY = my;
+  draw();
 };
 
+canvas.onmouseup = () => {
+  if (dragging || resizing) {
+    saveState();
+  }
+  dragging = false;
+  resizing = false;
+  resizeIndex = -1;
+};
 
-    // Check if click is inside the room for dragging
-    if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
-        dragging = true;
-        dragIndex = i;
-        offsetX = mx - r.x;
-        offsetY = my - r.y;
-        return;
-    }
-}
 
   // Check if clicking inside any room
   let found = false;
@@ -308,53 +359,33 @@ canvas.style.cursor = hoveringResize ? 'nwse-resize' : 'default';
   draw();
 };
 
-canvas.onmouseup = () => {
-  if (dragging || resizing) saveState();
-  dragging = false;
-  resizing = false;
-  resizeIndex = -1;
-};
 
-canvas.onmousedown = (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
 
-  for (let i = rooms.length - 1; i >= 0; i--) {
-    const room = rooms[i];
-
-    // Check for resize handle (bottom-right corner)
-    const handleSize = 10;
+    // Dragging
     if (
-      mouseX >= room.x + room.width - handleSize &&
-      mouseX <= room.x + room.width &&
-      mouseY >= room.y + room.height - handleSize &&
-      mouseY <= room.y + room.height
+      mx >= r.x && mx <= r.x + r.w &&
+      my >= r.y && my <= r.y + r.h
     ) {
-      resizing = true;
-      resizeIndex = i;
-      offsetX = mouseX;
-      offsetY = mouseY;
-      initialWidth = room.width;
-      initialHeight = room.height;
-      return;
-    }
-
-    // Check for drag (click inside box)
-    if (
-      mouseX >= room.x &&
-      mouseX <= room.x + room.width &&
-      mouseY >= room.y &&
-      mouseY <= room.y + room.height
-    ) {
+      if (!e.shiftKey && !selected.includes(i)) {
+        selected = [i];
+      } else if (e.shiftKey && !selected.includes(i)) {
+        selected.push(i);
+      }
       dragging = true;
-      dragIndex = i;
-      offsetX = mouseX - room.x;
-      offsetY = mouseY - room.y;
+      startX = mx;
+      startY = my;
+      draw();
       return;
     }
   }
+
+  // Clicked outside any room
+  if (!e.shiftKey) {
+    selected = [];
+    draw();
+  }
 };
+
 
 // --------- Settings Modal ----------
 
