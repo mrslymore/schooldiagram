@@ -220,7 +220,8 @@ canvas.onmousedown = (e) => {
 
   for (let i = rooms.length - 1; i >= 0; i--) {
     const r = rooms[i];
-    // Check for resize handle
+
+    // Check for resize
     if (
       mx >= r.x + r.w - 10 && mx <= r.x + r.w &&
       my >= r.y + r.h - 10 && my <= r.y + r.h
@@ -234,7 +235,7 @@ canvas.onmousedown = (e) => {
       return;
     }
 
-    // Check if clicked inside room
+    // Check for move
     if (
       mx >= r.x && mx <= r.x + r.w &&
       my >= r.y && my <= r.y + r.h
@@ -252,7 +253,7 @@ canvas.onmousedown = (e) => {
     }
   }
 
-  // Clicked empty area
+  // Clicked empty space
   if (!e.shiftKey) {
     selected = [];
     draw();
@@ -264,27 +265,16 @@ canvas.onmousemove = (e) => {
   const mx = (e.clientX - rect.left) / zoom;
   const my = (e.clientY - rect.top) / zoom;
 
-  let hoveringResize = false;
+  let cursor = "default";
 
-  // Hover state for cursor
-  for (let i = rooms.length - 1; i >= 0; i--) {
-    const r = rooms[i];
-    if (
-      mx >= r.x + r.w - 10 && mx <= r.x + r.w &&
-      my >= r.y + r.h - 10 && my <= r.y + r.h
-    ) {
-      hoveringResize = true;
-      break;
-    }
-  }
-
-  if (resizing) {
+  if (resizing && resizeIndex !== -1) {
     const dx = mx - startX;
     const dy = my - startY;
     const r = rooms[resizeIndex];
     r.w = Math.max(30, initialWidth + dx);
     r.h = Math.max(30, initialHeight + dy);
     draw();
+    cursor = "nwse-resize";
   } else if (dragging) {
     const dx = mx - startX;
     const dy = my - startY;
@@ -295,15 +285,27 @@ canvas.onmousemove = (e) => {
     startX = mx;
     startY = my;
     draw();
+    cursor = "move";
+  } else {
+    for (let i = rooms.length - 1; i >= 0; i--) {
+      const r = rooms[i];
+      if (
+        mx >= r.x + r.w - 10 && mx <= r.x + r.w &&
+        my >= r.y + r.h - 10 && my <= r.y + r.h
+      ) {
+        cursor = "nwse-resize";
+        break;
+      } else if (
+        mx >= r.x && mx <= r.x + r.w &&
+        my >= r.y && my <= r.y + r.h
+      ) {
+        cursor = "move";
+        break;
+      }
+    }
   }
 
-  canvas.style.cursor = resizing
-    ? 'nwse-resize'
-    : dragging
-    ? 'move'
-    : hoveringResize
-    ? 'nwse-resize'
-    : 'default';
+  canvas.style.cursor = cursor;
 };
 
 canvas.onmouseup = () => {
@@ -315,42 +317,6 @@ canvas.onmouseup = () => {
   resizeIndex = -1;
   dragIndex = -1;
 };
-
-
-
-  // Check if clicking inside any room
-  let found = false;
-  for (let i = rooms.length -1; i >= 0; i--) {
-    const r = rooms[i];
-    if (
-      mx >= r.x && mx <= r.x + r.w &&
-      my >= r.y && my <= r.y + r.h
-    ) {
-      if (!e.shiftKey && !selected.includes(i)) {
-        selected = [i];
-      } else if (e.shiftKey && !selected.includes(i)) {
-        selected.push(i);
-      }
-      dragging = true;
-      found = true;
-      draw();
-      return;
-    }
-  }
-  // If clicked outside any room, clear selection
-  if (!found && !e.shiftKey) {
-    selected = [];
-    draw();
-  }
-};
-
-  // Clicked outside any room
-  if (!e.shiftKey) {
-    selected = [];
-    draw();
-  }
-};
-
 
 // --------- Settings Modal ----------
 
